@@ -1,0 +1,15 @@
+{
+    "name": "gensan/car-rental-system",
+    "description": "Gensan Car Rental Services - Integrated Asset Tracking & Procurement Management System",
+    "type": "project",
+    "require": {
+        "phpoffice/phpspreadsheet": "^1.29",
+        "dompdf/dompdf": "^2.0",
+        "endroid/qr-code": "^4.0"
+    },
+    "autoload": {
+        "classmap": [
+            "classes/"
+        ]
+    }
+}

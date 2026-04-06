@@ -1,0 +1,6 @@
+# Prevent direct access to documents
+Order Deny,Allow
+Deny from all
+
+# Disable directory browsing
+Options -Indexes

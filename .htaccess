@@ -1,0 +1,54 @@
+# /var/www/html/gensan-car-rental-system/.htaccess
+
+# Enable rewrite engine
+RewriteEngine On
+
+# Set base directory
+RewriteBase /IATPS/gensan-car-rental-system/
+
+# Protect sensitive directories
+RewriteRule ^(config|classes|logs|backups|temp|vendor)/ - [F,L]
+
+# Protect .htaccess and other hidden files
+<FilesMatch "^\.">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# PHP settings
+php_value upload_max_filesize 10M
+php_value post_max_size 10M
+php_value max_execution_time 300
+php_value memory_limit 256M
+
+# Enable gzip compression
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/css application/javascript application/json
+</IfModule>
+
+# Cache control for static assets
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType image/jpeg "access plus 1 month"
+    ExpiresByType image/png "access plus 1 month"
+    ExpiresByType text/css "access plus 1 week"
+    ExpiresByType application/javascript "access plus 1 week"
+</IfModule>
+
+# Security headers
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set X-XSS-Protection "1; mode=block"
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# Custom error pages
+ErrorDocument 404 /IATPS/gensan-car-rental-system/errors/404.php
+ErrorDocument 403 /IATPS/gensan-car-rental-system/errors/403.php
+ErrorDocument 500 /IATPS/gensan-car-rental-system/errors/500.php
+
+# URL routing for clean URLs (optional implementation)
+# RewriteRule ^dashboard$ modules/dashboard/index.php [L]
+# RewriteRule ^vehicles$ modules/asset-tracking/index.php [L]
+# RewriteRule ^vehicles/([0-9]+)$ modules/asset-tracking/vehicle-details.php?id=$1 [L]

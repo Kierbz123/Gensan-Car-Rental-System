@@ -1,0 +1,45 @@
+# Gensan Car Rental System - Git Ignore Rules
+
+# Environment & Secrets
+.env
+*.env.local
+
+# Dependencies
+/vendor/
+composer.phar
+
+# Sessions & Temp
+/temp/
+/temp/sessions/
+
+# Logs
+/logs/*.log
+
+# Backups
+/backups/*.sql
+/backups/*.zip
+
+# Uploads (keep directory structure, ignore content)
+/assets/images/uploads/*
+!/assets/images/uploads/.gitkeep
+/assets/images/qr_codes/*
+!/assets/images/qr_codes/.gitkeep
+
+# IDE & Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# OS files
+*.tmp
+*.bak
+
+# Debug/Test files (should not exist in production)
+test*.php
+debug*.php
+check_*.php

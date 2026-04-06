@@ -1,0 +1,18 @@
+Field	Type	Null	Key	Default	Extra
+schedule_id	int(10) unsigned	NO	PRI	NULL	auto_increment
+vehicle_id	varchar(20)	NO	MUL	NULL	
+service_type	enum('oil_change','tire_rotation','brake_inspection','engine_tuneup','transmission_service','aircon_cleaning','battery_check','coolant_flush','timing_belt','general_checkup','others')	NO		NULL	
+schedule_basis	enum('time_only','mileage_only','time_and_mileage')	NO		NULL	
+interval_months	tinyint(3) unsigned	YES		NULL	
+interval_mileage	int(10) unsigned	YES		NULL	
+advance_notice_days	tinyint(3) unsigned	YES		7	
+next_due_date	date	YES	MUL	NULL	
+next_due_mileage	int(10) unsigned	YES		NULL	
+last_service_date	date	YES		NULL	
+last_service_mileage	int(10) unsigned	YES		NULL	
+last_maintenance_id	int(10) unsigned	YES		NULL	
+status	enum('active','paused','completed','overdue')	YES	MUL	active	
+notes	text	YES		NULL	
+created_by	int(10) unsigned	YES	MUL	NULL	
+created_at	timestamp	NO		current_timestamp()	
+updated_at	timestamp	NO		current_timestamp()	on update current_timestamp()

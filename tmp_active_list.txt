@@ -1,0 +1,178 @@
+array (
+  0 => 
+  array (
+    'record_id' => 1,
+    'vehicle_id' => 'GCR-SD-0001',
+    'compliance_type' => 'lto_registration',
+    'expiry_date' => '2026-11-10',
+    'status' => 'active',
+  ),
+  1 => 
+  array (
+    'record_id' => 2,
+    'vehicle_id' => 'GCR-SD-0001',
+    'compliance_type' => 'insurance_tpl',
+    'expiry_date' => '2026-04-01',
+    'status' => 'renewal_pending',
+  ),
+  2 => 
+  array (
+    'record_id' => 3,
+    'vehicle_id' => 'GCR-SD-0001',
+    'compliance_type' => 'emission_test',
+    'expiry_date' => '2026-11-10',
+    'status' => 'active',
+  ),
+  3 => 
+  array (
+    'record_id' => 5,
+    'vehicle_id' => 'GCR-SD-0002',
+    'compliance_type' => 'insurance_comprehensive',
+    'expiry_date' => '2026-08-15',
+    'status' => 'active',
+  ),
+  4 => 
+  array (
+    'record_id' => 6,
+    'vehicle_id' => 'GCR-SU-0001',
+    'compliance_type' => 'lto_registration',
+    'expiry_date' => '2026-05-20',
+    'status' => 'active',
+  ),
+  5 => 
+  array (
+    'record_id' => 7,
+    'vehicle_id' => 'GCR-SU-0001',
+    'compliance_type' => 'insurance_comprehensive',
+    'expiry_date' => '2026-05-20',
+    'status' => 'active',
+  ),
+  6 => 
+  array (
+    'record_id' => 9,
+    'vehicle_id' => 'GCR-VN-0001',
+    'compliance_type' => 'insurance_tpl',
+    'expiry_date' => '2027-11-05',
+    'status' => 'active',
+  ),
+  7 => 
+  array (
+    'record_id' => 10,
+    'vehicle_id' => 'GCR-PU-0001',
+    'compliance_type' => 'lto_registration',
+    'expiry_date' => '2026-08-15',
+    'status' => 'active',
+  ),
+  8 => 
+  array (
+    'record_id' => 11,
+    'vehicle_id' => 'GCR-HB-0001',
+    'compliance_type' => 'lto_registration',
+    'expiry_date' => '2027-03-25',
+    'status' => 'active',
+  ),
+  9 => 
+  array (
+    'record_id' => 12,
+    'vehicle_id' => 'GCR-HB-0001',
+    'compliance_type' => 'emission_test',
+    'expiry_date' => '2027-03-25',
+    'status' => 'active',
+  ),
+  10 => 
+  array (
+    'record_id' => 100,
+    'vehicle_id' => 'GCR-HB-0002',
+    'compliance_type' => 'lto_registration',
+    'expiry_date' => '2026-04-18',
+    'status' => 'active',
+  ),
+  11 => 
+  array (
+    'record_id' => 101,
+    'vehicle_id' => 'GCR-HB-0002',
+    'compliance_type' => 'insurance_tpl',
+    'expiry_date' => '2026-04-18',
+    'status' => 'active',
+  ),
+  12 => 
+  array (
+    'record_id' => 114,
+    'vehicle_id' => 'GCR-MP-0001',
+    'compliance_type' => 'insurance_comprehensive',
+    'expiry_date' => '2026-03-20',
+    'status' => 'renewal_pending',
+  ),
+  13 => 
+  array (
+    'record_id' => 115,
+    'vehicle_id' => 'GCR-MP-0001',
+    'compliance_type' => 'emission_test',
+    'expiry_date' => '2026-07-15',
+    'status' => 'active',
+  ),
+  14 => 
+  array (
+    'record_id' => 119,
+    'vehicle_id' => 'GCR-PU-0001',
+    'compliance_type' => 'lto_registration',
+    'expiry_date' => '2026-08-15',
+    'status' => 'active',
+  ),
+  15 => 
+  array (
+    'record_id' => 120,
+    'vehicle_id' => 'GCR-PU-0001',
+    'compliance_type' => 'insurance_comprehensive',
+    'expiry_date' => '2026-08-15',
+    'status' => 'active',
+  ),
+  16 => 
+  array (
+    'record_id' => 130,
+    'vehicle_id' => 'GCR-VN-0001',
+    'compliance_type' => 'lto_registration',
+    'expiry_date' => '2030-12-27',
+    'status' => 'active',
+  ),
+  17 => 
+  array (
+    'record_id' => 131,
+    'vehicle_id' => 'GCR-SD-0002',
+    'compliance_type' => 'lto_registration',
+    'expiry_date' => '2030-12-27',
+    'status' => 'active',
+  ),
+  18 => 
+  array (
+    'record_id' => 132,
+    'vehicle_id' => 'GCR-VN-0001',
+    'compliance_type' => 'insurance_tpl',
+    'expiry_date' => '2030-12-25',
+    'status' => 'active',
+  ),
+  19 => 
+  array (
+    'record_id' => 134,
+    'vehicle_id' => 'GCR-MP-0001',
+    'compliance_type' => 'lto_registration',
+    'expiry_date' => '2030-12-28',
+    'status' => 'active',
+  ),
+  20 => 
+  array (
+    'record_id' => 135,
+    'vehicle_id' => 'GCR-SU-0001',
+    'compliance_type' => 'lto_registration',
+    'expiry_date' => '2026-03-18',
+    'status' => 'active',
+  ),
+  21 => 
+  array (
+    'record_id' => 136,
+    'vehicle_id' => 'GCR-SD-0001',
+    'compliance_type' => 'insurance_comprehensive',
+    'expiry_date' => '2026-04-12',
+    'status' => 'active',
+  ),
+)
