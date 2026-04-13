@@ -116,6 +116,135 @@ class ComplianceRecord
     }
 
     /**
+     * Get aggregate compliance stats
+     */
+    public function getStats()
+    {
+        return $this->db->fetchOne("
+            SELECT 
+                COUNT(*) as total_records,
+                COALESCE(SUM(CASE WHEN expiry_date > DATE_ADD(CURRENT_DATE(), INTERVAL 30 DAY) THEN 1 ELSE 0 END), 0) as total_active,
+                COALESCE(SUM(CASE WHEN expiry_date < CURRENT_DATE() THEN 1 ELSE 0 END), 0) as expired,
+                COALESCE(SUM(CASE WHEN expiry_date >= CURRENT_DATE() AND expiry_date <= DATE_ADD(CURRENT_DATE(), INTERVAL 30 DAY) THEN 1 ELSE 0 END), 0) as expiring_soon
+            FROM compliance_records c
+            WHERE status != 'renewed' AND status != 'cancelled'
+              AND expiry_date IS NOT NULL
+              AND expiry_date != '0000-00-00'
+              AND record_id = (
+                  SELECT MAX(record_id)
+                  FROM compliance_records c2
+                  WHERE c2.vehicle_id = c.vehicle_id AND c2.compliance_type = c.compliance_type
+              )
+        ");
+    }
+
+    /**
+     * Get paginated active compliance entries with advanced matrix sorting.
+     */
+    public function getAll($filters = [], $page = 1, $perPage = 25)
+    {
+        $where = ["c.status NOT IN ('renewed', 'cancelled')"];
+        $params = [];
+
+        // Subquery lock representing 'Latest unique entry'
+        $where[] = "c.record_id = (
+            SELECT MAX(record_id) 
+            FROM compliance_records c2 
+            WHERE c2.vehicle_id = c.vehicle_id AND c2.compliance_type = c.compliance_type
+        )";
+
+        if (!empty($filters['status'])) {
+            if ($filters['status'] === 'expired') {
+                $where[] = "c.expiry_date < CURRENT_DATE() AND c.expiry_date IS NOT NULL AND c.expiry_date != '0000-00-00'";
+            } elseif ($filters['status'] === 'critical') {
+                $where[] = "c.expiry_date >= CURRENT_DATE() AND c.expiry_date <= DATE_ADD(CURRENT_DATE(), INTERVAL 30 DAY)";
+            } elseif ($filters['status'] === 'valid') {
+                $where[] = "c.expiry_date > DATE_ADD(CURRENT_DATE(), INTERVAL 30 DAY)";
+            }
+        }
+
+        if (!empty($filters['type'])) {
+            $where[] = "c.compliance_type = ?";
+            $params[] = $filters['type'];
+        }
+
+        if (!empty($filters['search'])) {
+            $search = '%' . $filters['search'] . '%';
+            $where[] = "(v.plate_number LIKE ? OR v.brand LIKE ? OR v.model LIKE ? OR c.document_number LIKE ?)";
+            $params = array_merge($params, [$search, $search, $search, $search]);
+        }
+
+        $whereClause = implode(' AND ', $where);
+
+        $sortBy = "CASE WHEN c.expiry_date < CURRENT_DATE() THEN 1 ELSE 2 END ASC, c.expiry_date";
+        $sortOrder = "ASC";
+
+        if (!empty($filters['sort_by'])) {
+            $allowedSorts = ['v.plate_number', 'c.compliance_type', 'c.document_number', 'c.expiry_date', 'c.status'];
+            if (in_array($filters['sort_by'], $allowedSorts)) {
+                $sortBy = $filters['sort_by'];
+            }
+        }
+
+        if (!empty($filters['sort_order']) && in_array(strtoupper($filters['sort_order']), ['ASC', 'DESC'])) {
+            $sortOrder = strtoupper($filters['sort_order']);
+            if (!empty($filters['sort_by'])) {
+                $sortBy .= " {$sortOrder}"; // Append order directly since it's a valid simple column string
+            }
+        }
+
+        $totalCount = (int) ($this->db->fetchColumn("
+            SELECT COUNT(*) 
+            FROM compliance_records c
+            JOIN vehicles v ON c.vehicle_id = v.vehicle_id
+            WHERE {$whereClause}
+        ", $params) ?? 0);
+
+        $offset = ($page - 1) * $perPage;
+
+        $items = $this->db->fetchAll("
+            SELECT c.*, v.plate_number, v.brand, v.model
+            FROM compliance_records c
+            JOIN vehicles v ON c.vehicle_id = v.vehicle_id
+            WHERE {$whereClause}
+            ORDER BY {$sortBy}
+            LIMIT ? OFFSET ?
+        ", array_merge($params, [$perPage, $offset]));
+
+        return [
+            'data' => $items,
+            'total' => $totalCount,
+            'page' => $page,
+            'per_page' => $perPage,
+            'total_pages' => $totalCount > 0 ? ceil($totalCount / $perPage) : 1
+        ];
+    }
+
+    /**
+     * Fetch log traces strictly tunneling search logic
+     */
+    public function getRecentHistory($filters = [])
+    {
+        $params = [];
+        $searchFilter = "";
+
+        if (!empty($filters['search'])) {
+            $search = '%' . $filters['search'] . '%';
+            $searchFilter = "WHERE (v.plate_number LIKE ? OR v.brand LIKE ? OR v.model LIKE ? OR c.document_number LIKE ?)";
+            $params = [$search, $search, $search, $search];
+        }
+
+        return $this->db->fetchAll("
+            SELECT c.*, v.plate_number, v.brand, v.model
+            FROM compliance_records c
+            JOIN vehicles v ON c.vehicle_id = v.vehicle_id
+            {$searchFilter}
+            ORDER BY c.created_at DESC
+            LIMIT 15
+        ", $params);
+    }
+
+    /**
      * Check and update compliance statuses
      * Should be run daily via cron job
      */

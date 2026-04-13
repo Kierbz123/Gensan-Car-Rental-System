@@ -7,11 +7,13 @@ require_once '../../includes/session-manager.php';
 require_once '../../classes/BackupManager.php';
 
 // Only System Admin can perform these actions
-if ($authUser->getData()['role'] !== 'system_admin') {
+if (empty($authUser->getData()['role']) || $authUser->getData()['role'] !== 'system_admin') {
     if (isset($_GET['action']) && $_GET['action'] === 'download') {
         die("Unauthorized access.");
     }
+    ob_clean();
     http_response_code(403);
+    header('Content-Type: application/json');
     echo json_encode(['success' => false, 'error' => 'Unauthorized']);
     exit;
 }
@@ -22,6 +24,8 @@ $backupManager = new BackupManager();
 try {
     if ($action === 'create') {
         $backupId = $backupManager->createBackup('manual', $authUser->getId());
+        ob_clean();
+        header('Content-Type: application/json');
         echo json_encode(['success' => true, 'backup_id' => $backupId]);
         exit;
     }
@@ -30,6 +34,8 @@ try {
         $id = $_POST['id'] ?? '';
         if (!$id) throw new Exception("Backup ID required");
         $backupManager->restoreBackup($id, $authUser->getId());
+        ob_clean();
+        header('Content-Type: application/json');
         echo json_encode(['success' => true]);
         exit;
     }
@@ -38,6 +44,8 @@ try {
         $id = $_POST['id'] ?? '';
         if (!$id) throw new Exception("Backup ID required");
         $backupManager->deleteBackup($id, $authUser->getId());
+        ob_clean();
+        header('Content-Type: application/json');
         echo json_encode(['success' => true]);
         exit;
     }
@@ -79,7 +87,9 @@ try {
     if ($action === 'download') {
         die("Error: " . $e->getMessage());
     }
+    ob_clean();
     http_response_code(400);
+    header('Content-Type: application/json');
     echo json_encode(['success' => false, 'error' => $e->getMessage()]);
     exit;
 }

@@ -134,14 +134,18 @@ class User
 
         // Set session cookie
         setcookie(SESSION_NAME, $sessionId, [
-            'expires' => time() + SESSION_TIMEOUT,
-            'path' => '/',
-            'secure' => false,
+            'expires'  => time() + SESSION_TIMEOUT,
+            'path'     => '/',
+            'secure'   => (defined('ENVIRONMENT') && ENVIRONMENT === 'production'),
             'httponly' => true,
             'samesite' => 'Lax'
         ]);
 
-        $_SESSION['user_id'] = $userId;
+        // Regenerate PHP native session ID BEFORE writing session data
+        // (prevents fixation AND avoids destroying just-written data)
+        session_regenerate_id(true);
+
+        $_SESSION['user_id']    = $userId;
         $_SESSION['session_id'] = $sessionId;
         $_SESSION['login_time'] = time();
     }
@@ -194,7 +198,8 @@ class User
         );
 
         if (!$session) {
-            self::logout();
+            // Do NOT call logout() here — a transient DB failure would permanently
+            // destroy the session. Just return false and let the redirect happen.
             return false;
         }
 
@@ -204,8 +209,10 @@ class User
             [$sessionId]
         );
 
-        // Regenerate session ID periodically (every 30 minutes)
-        if (time() - strtotime($session['login_time']) > 1800) {
+        // Regenerate session ID periodically — but use last_activity, not login_time.
+        // login_time never updates, so the old code regenerated on EVERY request after 30 min,
+        // causing a race condition with concurrent tabs.
+        if (!empty($session['last_activity']) && time() - strtotime($session['last_activity']) > 1800) {
             self::regenerateSession($sessionId);
         }
 
@@ -237,15 +244,18 @@ class User
         );
 
         setcookie(SESSION_NAME, $newSessionId, [
-            'expires' => time() + SESSION_TIMEOUT,
-            'path' => '/',
-            'secure' => false,
+            'expires'  => time() + SESSION_TIMEOUT,
+            'path'     => '/',
+            'secure'   => (defined('ENVIRONMENT') && ENVIRONMENT === 'production'),
             'httponly' => true,
             'samesite' => 'Lax'
         ]);
 
         if (isset($_SESSION['session_id'])) {
             $_SESSION['session_id'] = $newSessionId;
+            // Reset PHP-side login_time so the session-manager idle check
+            // doesn't fire exactly 1 hour after login regardless of activity
+            $_SESSION['login_time'] = time();
         }
     }
 
@@ -286,9 +296,9 @@ class User
 
         // Clear cookie
         setcookie(SESSION_NAME, '', [
-            'expires' => time() - 3600,
-            'path' => '/',
-            'secure' => false,
+            'expires'  => time() - 3600,
+            'path'     => '/',
+            'secure'   => (defined('ENVIRONMENT') && ENVIRONMENT === 'production'),
             'httponly' => true,
             'samesite' => 'Lax'
         ]);

@@ -16,6 +16,16 @@ $data = [
     'is_active' => 1, 'notes' => '',
 ];
 
+$CATEGORIES = [
+    'auto_parts' => 'Auto Parts', 'maintenance_supplies' => 'Maintenance Supplies',
+    'fuel' => 'Fuel', 'tires' => 'Tires', 'carwash_supplies' => 'Carwash Supplies',
+    'insurance' => 'Insurance', 'registration_services' => 'Registration Services', 'others' => 'Others',
+];
+$BIZ_TYPES = [
+    'corporation' => 'Corporation', 'partnership' => 'Partnership',
+    'sole_proprietor' => 'Sole Proprietor', 'cooperative' => 'Cooperative',
+];
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!validateCsrfToken($_POST['csrf_token'] ?? '')) {
         $error = 'Invalid security token.';
@@ -26,11 +36,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if (empty($data['company_name'])) $error = 'Company name is required.';
         elseif (empty($data['phone_primary'])) $error = 'Primary phone is required.';
+        elseif (!empty($data['email']) && !filter_var($data['email'], FILTER_VALIDATE_EMAIL))
+            $error = 'Please enter a valid email address.';
+        elseif (!empty($data['credit_limit']) && !is_numeric($data['credit_limit']))
+            $error = 'Credit limit must be a valid number.';
+        elseif (!empty($data['lead_time_days']) && (!ctype_digit((string) $data['lead_time_days']) || (int) $data['lead_time_days'] < 0))
+            $error = 'Lead time must be a non-negative whole number.';
+        else {
+            // Server-side enum whitelist — <select> is bypassable via curl
+            $allowedCategories = array_keys($CATEGORIES);
+            if (!empty($data['category']) && !in_array($data['category'], $allowedCategories, true))
+                $error = 'Invalid category selected.';
+
+            $allowedBizTypes = array_keys($BIZ_TYPES);
+            if (!$error && !empty($data['business_type']) && !in_array($data['business_type'], $allowedBizTypes, true))
+                $error = 'Invalid business type selected.';
+        }
 
         if (!$error) {
             try {
                 $supplier = new Supplier();
-                $newId = $supplier->create($data, $authUser->getData()['user_id']);
+                $newId = $supplier->create($data, $authUser->getId());
                 $_SESSION['success_message'] = 'Supplier added successfully.';
                 header("Location: supplier-view.php?id={$newId}");
                 exit;
@@ -43,17 +69,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $pageTitle = 'Add Supplier';
 require_once '../../includes/header.php';
-
-$CATEGORIES = [
-    'auto_parts' => 'Auto Parts', 'maintenance_supplies' => 'Maintenance Supplies',
-    'fuel' => 'Fuel', 'tires' => 'Tires', 'carwash_supplies' => 'Carwash Supplies',
-    'insurance' => 'Insurance', 'registration_services' => 'Registration Services', 'others' => 'Others',
-];
-$BIZ_TYPES = [
-    'corporation' => 'Corporation', 'partnership' => 'Partnership',
-    'sole_proprietor' => 'Sole Proprietor', 'cooperative' => 'Cooperative',
-];
 ?>
+
 
 <div class="page-header">
     <div class="page-title">
@@ -69,7 +86,7 @@ $BIZ_TYPES = [
     </div>
 </div>
 
-<form method="POST" style="max-width:720px;">
+<form method="POST" style="max-width:720px;" class="needs-validation" novalidate>
     <?= csrfField() ?>
 
     <?php if ($error): ?>

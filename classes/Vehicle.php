@@ -47,9 +47,41 @@ class Vehicle
             }
         }
 
-        // Check for duplicate plate number
+        // ── Server-Side Format & Range Validation (FIX-09) ────────────────────
+        $currentYear = (int) date('Y');
+        $yearModel   = (int) $data['year_model'];
+        if ($yearModel < 1990 || $yearModel > $currentYear + 1) {
+            throw new Exception("Year model must be between 1990 and " . ($currentYear + 1) . ".");
+        }
+
+        if (!preg_match('/^[A-Z0-9\s\-]{2,20}$/i', $data['plate_number'])) {
+            throw new Exception("Invalid plate number format. Only letters, numbers, spaces, and dashes allowed (2–20 characters).");
+        }
+
+        $validFuelTypes = ['gasoline', 'diesel', 'hybrid', 'electric'];
+        if (!in_array($data['fuel_type'], $validFuelTypes)) {
+            throw new Exception("Invalid fuel type. Allowed: " . implode(', ', $validFuelTypes) . ".");
+        }
+
+        $validTransmissions = ['manual', 'automatic', 'cvt'];
+        if (!in_array($data['transmission'], $validTransmissions)) {
+            throw new Exception("Invalid transmission type. Allowed: " . implode(', ', $validTransmissions) . ".");
+        }
+
+        foreach (['daily_rental_rate', 'weekly_rental_rate', 'monthly_rental_rate', 'acquisition_cost'] as $rateField) {
+            if (isset($data[$rateField]) && $data[$rateField] !== '' && (float) $data[$rateField] < 0) {
+                throw new Exception(str_replace('_', ' ', ucwords($rateField, '_')) . " cannot be negative.");
+            }
+        }
+
+        $seats = (int) ($data['seating_capacity'] ?? 5);
+        if ($seats < 1 || $seats > 50) {
+            throw new Exception("Seating capacity must be between 1 and 50.");
+        }
+
+        // Check for duplicate plate number (PERF-02: LIMIT 1 stops scan after first match)
         $exists = $this->db->fetchOne(
-            "SELECT vehicle_id FROM vehicles WHERE plate_number = ? AND deleted_at IS NULL",
+            "SELECT vehicle_id FROM vehicles WHERE plate_number = ? AND deleted_at IS NULL LIMIT 1",
             [$data['plate_number']]
         );
 
@@ -60,7 +92,7 @@ class Vehicle
         // Check for duplicate engine number
         if (!empty($data['engine_number'])) {
             $existsEngine = $this->db->fetchOne(
-                "SELECT COUNT(*) as count FROM vehicles WHERE engine_number = ?",
+                "SELECT COUNT(*) as count FROM vehicles WHERE engine_number = ? AND deleted_at IS NULL",
                 [$data['engine_number']]
             );
 
@@ -72,7 +104,7 @@ class Vehicle
         // Check for duplicate chassis number
         if (!empty($data['chassis_number'])) {
             $existsChassis = $this->db->fetchOne(
-                "SELECT COUNT(*) as count FROM vehicles WHERE chassis_number = ?",
+                "SELECT COUNT(*) as count FROM vehicles WHERE chassis_number = ? AND deleted_at IS NULL",
                 [$data['chassis_number']]
             );
 
@@ -81,58 +113,86 @@ class Vehicle
             }
         }
 
-        // Generate vehicle ID
+        // Generate category code (read-only, safe outside the transaction)
         $categoryCode = $this->getCategoryCode($data['category_id']);
-        $vehicleId = $this->generateVehicleId($categoryCode);
 
-        // Handle photo upload
+        // ── Begin atomic DB transaction (BUG-01) ──────────────────────────────
+        // generateVehicleId() issues SELECT ... FOR UPDATE, which requires an
+        // active InnoDB transaction to prevent concurrent duplicate IDs.
+        // All DB writes (vehicle row, QR code path, maintenance schedules,
+        // compliance stubs) succeed or fail atomically.
+        $this->db->beginTransaction();
         $photoPath = null;
-        if (!empty($data['primary_photo']) && $data['primary_photo']['tmp_name']) {
-            $photoPath = $this->uploadVehiclePhoto($data['primary_photo'], $vehicleId);
+
+        try {
+            // ID generation uses FOR UPDATE lock — must be inside the transaction
+            $vehicleId = $this->generateVehicleId($categoryCode);
+
+            // Photo upload is a filesystem operation (cannot be rolled back by DB),
+            // so we do it inside the try block and clean up manually on failure.
+            if (!empty($data['primary_photo']) && $data['primary_photo']['tmp_name']) {
+                $photoPath = $this->uploadVehiclePhoto($data['primary_photo'], $vehicleId);
+            }
+
+            // Insert vehicle with explicit initial status (BUG-03)
+            $this->db->execute(
+                "INSERT INTO vehicles
+                 (vehicle_id, category_id, plate_number, engine_number, chassis_number,
+                  year_model, brand, model, variant, color, seating_capacity, fuel_type,
+                  transmission, acquisition_date, acquisition_cost, daily_rental_rate,
+                  weekly_rental_rate, monthly_rental_rate, security_deposit_amount,
+                  primary_photo_path, notes, current_status, created_by)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'available', ?)",
+                [
+                    $vehicleId,
+                    $data['category_id'],
+                    strtoupper($data['plate_number']),
+                    $data['engine_number'] ?? null,
+                    $data['chassis_number'] ?? null,
+                    $data['year_model'],
+                    $data['brand'],
+                    $data['model'],
+                    $data['variant'] ?? null,
+                    $data['color'],
+                    $data['seating_capacity'] ?? 5,
+                    $data['fuel_type'],
+                    $data['transmission'],
+                    $data['acquisition_date'],
+                    $data['acquisition_cost'] ?? null,
+                    $data['daily_rental_rate'],
+                    $data['weekly_rental_rate'] ?? null,
+                    $data['monthly_rental_rate'] ?? null,
+                    $data['security_deposit_amount'] ?? null,
+                    $photoPath,
+                    $data['notes'] ?? null,
+                    $createdBy
+                ]
+            );
+
+            // Generate QR Code (updates vehicles.qr_code_path inside the transaction)
+            $this->generateQRCode($vehicleId);
+
+            // Create default maintenance schedules
+            $this->createDefaultMaintenanceSchedules($vehicleId, $createdBy);
+
+            // Auto-create mandatory compliance stubs (ATL-04)
+            $this->createDefaultComplianceRecords($vehicleId, $createdBy);
+
+            $this->db->commit();
+
+        } catch (Exception $e) {
+            $this->db->rollback();
+            // Clean up the uploaded photo file if the DB side failed
+            if ($photoPath) {
+                $fullPath = BASE_PATH . ltrim($photoPath, '/');
+                if (file_exists($fullPath)) {
+                    @unlink($fullPath);
+                }
+            }
+            throw $e; // Re-throw so vehicle-add.php displays the error
         }
 
-        // Insert vehicle
-        $this->db->execute(
-            "INSERT INTO vehicles 
-             (vehicle_id, category_id, plate_number, engine_number, chassis_number,
-              year_model, brand, model, variant, color, seating_capacity, fuel_type,
-              transmission, acquisition_date, acquisition_cost, daily_rental_rate,
-              weekly_rental_rate, monthly_rental_rate, security_deposit_amount,
-              primary_photo_path, notes, created_by)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            [
-                $vehicleId,
-                $data['category_id'],
-                strtoupper($data['plate_number']),
-                $data['engine_number'] ?? null,
-                $data['chassis_number'] ?? null,
-                $data['year_model'],
-                $data['brand'],
-                $data['model'],
-                $data['variant'] ?? null,
-                $data['color'],
-                $data['seating_capacity'] ?? 5,
-                $data['fuel_type'],
-                $data['transmission'],
-                $data['acquisition_date'],
-                $data['acquisition_cost'] ?? null,
-                $data['daily_rental_rate'],
-                $data['weekly_rental_rate'] ?? null,
-                $data['monthly_rental_rate'] ?? null,
-                $data['security_deposit_amount'] ?? null,
-                $photoPath,
-                $data['notes'] ?? null,
-                $createdBy
-            ]
-        );
-
-        // Generate QR Code
-        $this->generateQRCode($vehicleId);
-
-        // Create initial maintenance schedules
-        $this->createDefaultMaintenanceSchedules($vehicleId, $createdBy);
-
-        // Log audit
+        // Audit log runs outside the transaction (non-critical, must not cause rollback)
         if (class_exists('AuditLogger')) {
             AuditLogger::log(
                 $createdBy,
@@ -183,11 +243,11 @@ class Vehicle
             }
         }
 
-        // Check engine number uniqueness if changed
+        // Check engine number uniqueness if changed (BUG-06: added deleted_at IS NULL)
         if (!empty($data['engine_number']) && $data['engine_number'] !== $vehicle['engine_number']) {
             $existsEngine = $this->db->fetchOne(
-                "SELECT COUNT(*) as count FROM vehicles 
-                 WHERE engine_number = ? AND vehicle_id != ?",
+                "SELECT COUNT(*) as count FROM vehicles
+                 WHERE engine_number = ? AND vehicle_id != ? AND deleted_at IS NULL",
                 [$data['engine_number'], $vehicleId]
             );
 
@@ -196,11 +256,11 @@ class Vehicle
             }
         }
 
-        // Check chassis number uniqueness if changed
+        // Check chassis number uniqueness if changed (BUG-06: added deleted_at IS NULL)
         if (!empty($data['chassis_number']) && $data['chassis_number'] !== $vehicle['chassis_number']) {
             $existsChassis = $this->db->fetchOne(
-                "SELECT COUNT(*) as count FROM vehicles 
-                 WHERE chassis_number = ? AND vehicle_id != ?",
+                "SELECT COUNT(*) as count FROM vehicles
+                 WHERE chassis_number = ? AND vehicle_id != ? AND deleted_at IS NULL",
                 [$data['chassis_number'], $vehicleId]
             );
 
@@ -440,29 +500,39 @@ class Vehicle
         // Get paginated results
         $offset = ($page - 1) * $perPage;
 
+        // PERF-01: Replaced 3 correlated sub-queries (O(n) extra queries) with
+        // derived-table LEFT JOINs — executes in a single optimized query plan.
         $vehicles = $this->db->fetchAll(
             "SELECT v.*, vc.category_name, vc.category_code,
-                    (SELECT COUNT(*) FROM rental_agreements 
-                     WHERE vehicle_id = v.vehicle_id AND status IN ('active', 'returned', 'completed')) as total_rentals,
-                    (SELECT MAX(service_date) FROM maintenance_logs 
-                     WHERE vehicle_id = v.vehicle_id) as last_service_date,
-                    (SELECT 
-                        CASE 
-                            WHEN MIN(expiry_date) < CURRENT_DATE() THEN 'breached'
-                            WHEN MIN(expiry_date) <= DATE_ADD(CURRENT_DATE(), INTERVAL 30 DAY) THEN 'expiring'
-                            ELSE 'valid'
-                        END
-                     FROM compliance_records 
-                     WHERE vehicle_id = v.vehicle_id 
-                       AND status NOT IN ('renewed', 'cancelled')
-                       AND record_id = (
-                           SELECT MAX(record_id)
-                           FROM compliance_records c2
-                           WHERE c2.vehicle_id = v.vehicle_id AND c2.compliance_type = compliance_records.compliance_type
-                       )
-                    ) as compliance_status
+                    COALESCE(ra_agg.total_rentals, 0) AS total_rentals,
+                    ml_agg.last_service_date,
+                    cr_agg.compliance_status
              FROM vehicles v
              JOIN vehicle_categories vc ON v.category_id = vc.category_id
+             LEFT JOIN (
+                 SELECT vehicle_id, COUNT(*) AS total_rentals
+                 FROM rental_agreements
+                 WHERE status IN ('active', 'returned', 'completed')
+                 GROUP BY vehicle_id
+             ) ra_agg ON ra_agg.vehicle_id = v.vehicle_id
+             LEFT JOIN (
+                 SELECT vehicle_id, MAX(service_date) AS last_service_date
+                 FROM maintenance_logs
+                 GROUP BY vehicle_id
+             ) ml_agg ON ml_agg.vehicle_id = v.vehicle_id
+             LEFT JOIN (
+                 SELECT vehicle_id,
+                        CASE
+                            WHEN MIN(expiry_date) < CURRENT_DATE()                             THEN 'breached'
+                            WHEN MIN(expiry_date) <= DATE_ADD(CURRENT_DATE(), INTERVAL 30 DAY) THEN 'expiring'
+                            ELSE 'valid'
+                        END AS compliance_status
+                 FROM compliance_records
+                 WHERE status NOT IN ('renewed', 'cancelled')
+                   AND expiry_date IS NOT NULL
+                   AND expiry_date != '0000-00-00'
+                 GROUP BY vehicle_id
+             ) cr_agg ON cr_agg.vehicle_id = v.vehicle_id
              WHERE {$whereClause}
              ORDER BY v.created_at DESC
              LIMIT ? OFFSET ?",
@@ -622,54 +692,123 @@ class Vehicle
      */
     private function uploadVehiclePhoto($file, $vehicleId)
     {
-        if (!in_array($file['type'], ALLOWED_IMAGE_TYPES)) {
-            throw new Exception("Invalid file type. Only JPG, PNG, GIF, WebP allowed.");
+        // BUG-02: Check PHP's own upload error code FIRST, before touching the file
+        if ($file['error'] !== UPLOAD_ERR_OK) {
+            $uploadErrors = [
+                UPLOAD_ERR_INI_SIZE   => 'File exceeds the server\'s upload_max_filesize limit.',
+                UPLOAD_ERR_FORM_SIZE  => 'File exceeds the form\'s MAX_FILE_SIZE limit.',
+                UPLOAD_ERR_PARTIAL    => 'File was only partially uploaded.',
+                UPLOAD_ERR_NO_FILE    => 'No file was uploaded.',
+                UPLOAD_ERR_NO_TMP_DIR => 'Missing server temporary folder.',
+                UPLOAD_ERR_CANT_WRITE => 'Failed to write file to disk.',
+                UPLOAD_ERR_EXTENSION  => 'Upload blocked by a PHP extension.',
+            ];
+            throw new Exception($uploadErrors[$file['error']] ?? 'Unknown upload error (code ' . $file['error'] . ').');
+        }
+
+        // BUG-02: Use finfo to verify the actual MIME type from file content,
+        // not the browser-supplied $file['type'] which is trivially spoofable.
+        $finfo    = finfo_open(FILEINFO_MIME_TYPE);
+        $mimeType = finfo_file($finfo, $file['tmp_name']);
+        finfo_close($finfo);
+
+        if (!in_array($mimeType, ALLOWED_IMAGE_TYPES)) {
+            throw new Exception("Invalid file type ({$mimeType}). Only JPG, PNG, GIF, WebP allowed.");
         }
 
         if ($file['size'] > MAX_UPLOAD_SIZE) {
-            throw new Exception("File size exceeds limit of " . (MAX_UPLOAD_SIZE / 1024 / 1024) . "MB");
+            throw new Exception("File size exceeds limit of " . (MAX_UPLOAD_SIZE / 1024 / 1024) . " MB.");
         }
 
-        $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
-        $filename = $vehicleId . '_primary_' . time() . '.' . $extension;
-        $filepath = VEHICLE_PHOTOS_PATH . $filename;
+        $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+        $filename  = $vehicleId . '_primary_' . time() . '.' . $extension;
+        $filepath  = VEHICLE_PHOTOS_PATH . $filename;
 
         if (!is_dir(VEHICLE_PHOTOS_PATH)) {
             mkdir(VEHICLE_PHOTOS_PATH, 0755, true);
         }
 
         if (!move_uploaded_file($file['tmp_name'], $filepath)) {
-            throw new Exception("Failed to upload file.");
+            throw new Exception("Failed to save uploaded file. Check directory permissions.");
         }
 
-        // Create thumbnail (placeholder for now)
+        // Create thumbnail using real GD resizing (BUG-07 fixed in createThumbnail)
         $this->createThumbnail($filepath, VEHICLE_PHOTOS_PATH . 'thumbs/' . $filename, 300, 200);
 
         return str_replace(BASE_PATH, '', $filepath);
     }
 
     /**
-     * Create image thumbnail
+     * Create a proportionally-scaled image thumbnail using the GD extension (BUG-07).
+     *
+     * @param string $source  Absolute path to the source image
+     * @param string $dest    Absolute path to write the thumbnail
+     * @param int    $width   Maximum thumbnail width in pixels
+     * @param int    $height  Maximum thumbnail height in pixels
      */
     private function createThumbnail($source, $dest, $width, $height)
     {
-        // Implementation using GD or ImageMagick
-        // ... thumbnail creation code ...
         if (!is_dir(dirname($dest))) {
             mkdir(dirname($dest), 0755, true);
         }
-        // Simplified skip for now
+
+        $info = @getimagesize($source);
+        if (!$info) {
+            return; // Not a valid image — skip silently (photo still saved)
+        }
+
+        [$srcW, $srcH, $type] = $info;
+
+        $src = match ($type) {
+            IMAGETYPE_JPEG => @imagecreatefromjpeg($source),
+            IMAGETYPE_PNG  => @imagecreatefrompng($source),
+            IMAGETYPE_GIF  => @imagecreatefromgif($source),
+            IMAGETYPE_WEBP => @imagecreatefromwebp($source),
+            default        => null
+        };
+
+        if (!$src) {
+            return; // GD cannot handle this format — skip
+        }
+
+        // Scale proportionally so neither dimension exceeds the target
+        $ratio = min($width / $srcW, $height / $srcH);
+        $newW  = max(1, (int) round($srcW * $ratio));
+        $newH  = max(1, (int) round($srcH * $ratio));
+
+        $thumb = imagecreatetruecolor($newW, $newH);
+
+        // Preserve transparency for PNG/GIF
+        if ($type === IMAGETYPE_PNG || $type === IMAGETYPE_GIF) {
+            imagealphablending($thumb, false);
+            imagesavealpha($thumb, true);
+            $transparent = imagecolorallocatealpha($thumb, 255, 255, 255, 127);
+            imagefill($thumb, 0, 0, $transparent);
+        }
+
+        imagecopyresampled($thumb, $src, 0, 0, 0, 0, $newW, $newH, $srcW, $srcH);
+        imagepng($thumb, $dest, 8); // PNG-8 compression for thumbnail
+
+        imagedestroy($src);
+        imagedestroy($thumb);
     }
 
     /**
-     * Generate vehicle ID
+     * Generate a unique vehicle ID for the given category (BUG-08).
+     *
+     * Uses SELECT ... FOR UPDATE inside the caller's active transaction to prevent
+     * two concurrent registrations from generating the same sequence number.
+     * MUST be called within an open DB transaction (beginTransaction).
      */
     private function generateVehicleId($categoryCode)
     {
+        // FOR UPDATE acquires an InnoDB gap/range lock on the matching rows,
+        // preventing concurrent inserts from reading the same MAX() value.
         $result = $this->db->fetchOne(
-            "SELECT COALESCE(MAX(CAST(SUBSTRING(vehicle_id, -4) AS UNSIGNED)), 0) + 1 as next_seq
+            "SELECT COALESCE(MAX(CAST(SUBSTRING_INDEX(vehicle_id, '-', -1) AS UNSIGNED)), 0) + 1 AS next_seq
              FROM vehicles
-             WHERE vehicle_id LIKE ?",
+             WHERE vehicle_id LIKE ?
+             FOR UPDATE",
             ["GCR-{$categoryCode}-%"]
         );
 
@@ -797,6 +936,15 @@ class Vehicle
             throw new Exception("Vehicle is already active.");
         }
 
+        // ATL-03: Log the recommission event so fleet managers can see when
+        // and by whom a decommissioned vehicle was restored.
+        $this->db->execute(
+            "INSERT INTO vehicle_status_logs
+                 (vehicle_id, previous_status, new_status, reason, changed_by, changed_at)
+             VALUES (?, 'decommissioned', 'available', 'Vehicle recommissioned', ?, NOW())",
+            [$vehicleId, $restoredBy]
+        );
+
         $this->db->execute(
             "UPDATE vehicles SET deleted_at = NULL, current_status = 'available', updated_at = NOW() WHERE vehicle_id = ?",
             [$vehicleId]
@@ -815,6 +963,32 @@ class Vehicle
         }
 
         return true;
+    }
+
+    /**
+     * Auto-create mandatory compliance record stubs for a new vehicle (ATL-04).
+     *
+     * Creates 'pending' placeholder records for the four most critical compliance
+     * types so the fleet manager is immediately alerted to fill in expiry dates.
+     * Uses INSERT IGNORE to safely handle repeated calls (e.g. after recommission).
+     */
+    private function createDefaultComplianceRecords($vehicleId, $createdBy)
+    {
+        $mandatoryTypes = [
+            'lto_registration',
+            'insurance_comprehensive',
+            'insurance_tpl',
+            'emission_test',
+        ];
+
+        foreach ($mandatoryTypes as $type) {
+            $this->db->execute(
+                "INSERT IGNORE INTO compliance_records
+                 (vehicle_id, compliance_type, status, expiry_date, created_by)
+                 VALUES (?, ?, 'pending', NULL, ?)",
+                [$vehicleId, $type, $createdBy]
+            );
+        }
     }
 
     /**

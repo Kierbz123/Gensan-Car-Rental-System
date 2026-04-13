@@ -15,7 +15,8 @@ if (!defined('GCR_SYSTEM')) {
 // Start session with secure settings
 if (session_status() === PHP_SESSION_NONE) {
     ini_set('session.cookie_httponly', 1);
-    ini_set('session.cookie_secure', 0); // HTTP safe for local dev
+    // Automatically enable secure cookies in production (requires HTTPS)
+    ini_set('session.cookie_secure', (defined('ENVIRONMENT') && ENVIRONMENT === 'production') ? 1 : 0);
     ini_set('session.cookie_samesite', 'Lax');
     ini_set('session.gc_maxlifetime', SESSION_TIMEOUT);
 
@@ -48,8 +49,10 @@ if (!$currentUser && !$isLoginPage) {
 /** @var User|null $authUser */
 $authUser = ($currentUser) ? new User($currentUser['user_id']) : null;
 
-// Check session timeout if logged in
-if ($currentUser && isset($_SESSION['login_time']) && (time() - $_SESSION['login_time'] > SESSION_TIMEOUT)) {
+// Check session timeout based on LAST ACTIVITY (not login time).
+// login_time is set once and never updated — using it would log out
+// any user exactly 1 hour after login even if they are actively navigating.
+if ($currentUser && isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity'] > SESSION_TIMEOUT)) {
     User::logout($currentUser['user_id'], $_SESSION['session_id'] ?? null);
     header("Location: " . BASE_URL . "login.php?timeout=1");
     exit;

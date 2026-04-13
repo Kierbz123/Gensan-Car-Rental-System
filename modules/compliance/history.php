@@ -19,6 +19,8 @@ try {
             COALESCE(SUM(CASE WHEN expiry_date >= CURRENT_DATE() AND expiry_date <= DATE_ADD(CURRENT_DATE(), INTERVAL 30 DAY) THEN 1 ELSE 0 END), 0) as expiring_soon
         FROM compliance_records c
         WHERE status != 'renewed' AND status != 'cancelled'
+          AND expiry_date IS NOT NULL
+          AND expiry_date != '0000-00-00'
           AND record_id = (
               SELECT MAX(record_id)
               FROM compliance_records c2
@@ -43,6 +45,8 @@ try {
         FROM compliance_records c
         JOIN vehicles v ON c.vehicle_id = v.vehicle_id
         WHERE c.status NOT IN ('renewed', 'cancelled')
+        AND c.expiry_date IS NOT NULL
+          AND c.expiry_date != '0000-00-00'
           AND c.expiry_date <= DATE_ADD(CURRENT_DATE(), INTERVAL 30 DAY)
           AND c.record_id = (
               SELECT MAX(record_id) 
@@ -132,8 +136,9 @@ try {
             <tbody>
                 <?php if (!empty($items)):
                     foreach ($items as $item):
-                        $diff = ceil((strtotime($item['expiry_date']) - time()) / (60 * 60 * 24));
-                        $badgeCls = $diff < 0 ? 'badge-danger' : 'badge-warning';
+                        $hasExp   = !empty($item['expiry_date']) && $item['expiry_date'] !== '0000-00-00';
+                        $diff     = $hasExp ? (int) ceil((strtotime($item['expiry_date']) - time()) / (60 * 60 * 24)) : null;
+                        $badgeCls = (!$hasExp || $diff >= 0) ? 'badge-warning' : 'badge-danger';
                         ?>
                         <tr>
                             <td>
@@ -148,14 +153,14 @@ try {
                                     class="badge badge-secondary"><?= strtoupper(str_replace('_', ' ', $item['compliance_type'])) ?></span>
                             </td>
                             <td style="font-family:monospace;"><?= htmlspecialchars($item['document_number'] ?? 'N/A') ?></td>
-                            <td style="font-weight:600; color:<?= $diff < 0 ? 'var(--danger)' : 'var(--text-main)' ?>;">
-                                <?= date('M d, Y', strtotime($item['expiry_date'])) ?>
+                            <td style="font-weight:600; color:<?= (!$hasExp || $diff >= 0) ? 'var(--text-main)' : 'var(--danger)' ?>;">
+                                <?= $hasExp ? date('M d, Y', strtotime($item['expiry_date'])) : '<em style="font-weight:400;opacity:.6">No expiry set</em>' ?>
                                 <div style="font-size:10px;">
-                                    <?= $diff < 0 ? abs($diff) . ' days lapsed' : $diff . ' days left' ?>
+                                    <?= !$hasExp ? 'Awaiting upload' : ($diff < 0 ? abs($diff) . ' days lapsed' : $diff . ' days left') ?>
                                 </div>
                             </td>
                             <td>
-                                <span class="badge <?= $badgeCls ?>"><?= $diff < 0 ? 'BREACHED' : 'PENDING' ?></span>
+                                <span class="badge <?= $badgeCls ?>"><?= (!$hasExp) ? 'PENDING' : ($diff < 0 ? 'BREACHED' : 'EXPIRING') ?></span>
                             </td>
                             <td>
                                 <div class="table-actions" style="justify-content: flex-end;">

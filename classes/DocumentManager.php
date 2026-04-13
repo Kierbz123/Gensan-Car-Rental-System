@@ -134,6 +134,23 @@ class DocumentManager
     }
 
     /**
+     * Get real-time stats representing total repository usage
+     */
+    public static function getStats()
+    {
+        self::init();
+        return self::$db->fetchOne("
+            SELECT 
+                COUNT(*) as total_docs,
+                SUM(file_size) as total_size,
+                SUM(CASE WHEN document_category = 'contract' THEN 1 ELSE 0 END) as total_contracts,
+                SUM(CASE WHEN document_category = 'identity' THEN 1 ELSE 0 END) as total_identities
+            FROM documents
+            WHERE status = 'active'
+        ");
+    }
+
+    /**
      * Get documents for a specific entity
      */
     public static function getDocumentsByEntity($entityType, $entityId)
@@ -201,6 +218,20 @@ class DocumentManager
 
         $whereClause = implode(' AND ', $where);
 
+        $sortBy = "d.uploaded_at";
+        $sortOrder = "DESC";
+
+        if (!empty($filters['sort_by'])) {
+            $allowedSorts = ['d.title', 'd.document_category', 'd.entity_type', 'd.file_size', 'd.uploaded_at'];
+            if (in_array($filters['sort_by'], $allowedSorts)) {
+                $sortBy = $filters['sort_by'];
+            }
+        }
+
+        if (!empty($filters['sort_order']) && in_array(strtoupper($filters['sort_order']), ['ASC', 'DESC'])) {
+            $sortOrder = strtoupper($filters['sort_order']);
+        }
+
         $count = self::$db->fetchColumn(
             "SELECT COUNT(*) FROM documents d WHERE {$whereClause}",
             $params
@@ -214,7 +245,7 @@ class DocumentManager
              FROM documents d
              LEFT JOIN users u ON d.uploaded_by = u.user_id
              WHERE {$whereClause}
-             ORDER BY d.uploaded_at DESC
+             ORDER BY {$sortBy} {$sortOrder}
              LIMIT ? OFFSET ?",
             array_merge($params, [$perPage, $offset])
         );
@@ -224,7 +255,7 @@ class DocumentManager
             'total' => $count,
             'page' => $page,
             'per_page' => $perPage,
-            'total_pages' => ceil($count / $perPage)
+            'total_pages' => $count > 0 ? ceil($count / $perPage) : 1
         ];
     }
 

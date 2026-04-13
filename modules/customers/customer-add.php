@@ -34,7 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 exit;
             } catch (Exception $e) {
                 error_log("Customer registration failed: " . $e->getMessage());
-                $errors[] = 'Registration failed. Please try again.';
+                $errors[] = $e->getMessage();
             }
         }
     }
@@ -70,7 +70,7 @@ require_once '../../includes/header.php';
         </div>
     <?php endif; ?>
 
-    <form method="POST" enctype="multipart/form-data">
+    <form method="POST" enctype="multipart/form-data" class="needs-validation" novalidate>
         <?= csrfField() ?>
         <div class="max-w-4xl mx-auto">
             <div class="flex flex-col gap-6">

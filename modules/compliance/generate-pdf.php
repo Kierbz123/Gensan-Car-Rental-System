@@ -46,12 +46,14 @@ $complianceTypes = [
 $typeLabel = $complianceTypes[$record['compliance_type']]
     ?? strtoupper(str_replace('_', ' ', $record['compliance_type']));
 
-$diff       = ceil((strtotime($record['expiry_date']) - time()) / 86400);
-$isExpired  = $diff < 0;
-$isWarning  = !$isExpired && $diff <= 30;
-$statusText = $isExpired ? 'BREACHED' : ($isWarning ? 'EXPIRING SOON' : 'VALID');
-$statusHex  = $isExpired ? '#dc2626' : ($isWarning ? '#d97706' : '#16a34a');
-$statusBg   = $isExpired ? '#fef2f2' : ($isWarning ? '#fffbeb' : '#f0fdf4');
+$hasExpiry  = !empty($record['expiry_date']) && $record['expiry_date'] !== '0000-00-00';
+$diff       = $hasExpiry ? (int) ceil((strtotime($record['expiry_date']) - time()) / 86400) : null;
+$isExpired  = $hasExpiry && $diff < 0;
+$isWarning  = $hasExpiry && !$isExpired && $diff <= 30;
+$isPending  = !$hasExpiry;
+$statusText = $isPending ? 'PENDING'   : ($isExpired ? 'BREACHED' : ($isWarning ? 'EXPIRING SOON' : 'VALID'));
+$statusHex  = $isPending ? '#64748b'   : ($isExpired ? '#dc2626'  : ($isWarning ? '#d97706'       : '#16a34a'));
+$statusBg   = $isPending ? '#f8fafc'   : ($isExpired ? '#fef2f2'  : ($isWarning ? '#fffbeb'       : '#f0fdf4'));
 
 $autoPrint = !empty($_GET['autoprint']);
 $generatedAt = date('F j, Y  h:i A');
@@ -249,9 +251,9 @@ $base = rtrim(BASE_URL, '/');
             <div class="label">Compliance Status</div>
             <div class="value"><?= $statusText ?></div>
             <div style="font-size:8pt; color:#64748b; margin-top:3px;">
-                <?= $isExpired
-                    ? abs($diff) . ' day(s) past expiry'
-                    : $diff . ' day(s) until expiry' ?>
+                <?= $isPending
+                    ? 'No expiry date set'
+                    : ($isExpired ? abs($diff) . ' day(s) past expiry' : $diff . ' day(s) until expiry') ?>
             </div>
         </div>
         <span class="status-badge"><?= $statusText ?></span>
@@ -308,7 +310,7 @@ $base = rtrim(BASE_URL, '/');
         <div class="data-field">
             <div class="lbl">Expiry Date</div>
             <div class="val" style="color:<?= $statusHex ?>;">
-                <?= date('F j, Y', strtotime($record['expiry_date'])) ?>
+                <?= $hasExpiry ? date('F j, Y', strtotime($record['expiry_date'])) : '<em>Not yet set</em>' ?>
             </div>
         </div>
         <div class="data-field">

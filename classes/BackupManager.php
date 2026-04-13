@@ -144,8 +144,8 @@ class BackupManager
         }
 
         try {
-            // Many statements separated by semicolons
-            $this->db->execute($sql);
+            // Use exec on the connection directly since prepared statements don't support multi-query
+            $this->db->getConnection()->exec($sql);
 
             if (class_exists('AuditLogger') && $restoredBy) {
                 AuditLogger::log($restoredBy, null, null, 'restore', 'settings', 'backups', $backupId, "Restored database from backup: {$backupId}", null, null, $_SERVER['REMOTE_ADDR'] ?? null, $_SERVER['HTTP_USER_AGENT'] ?? null, 'POST', '/settings/backups/restore', 'warning');

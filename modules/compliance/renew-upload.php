@@ -70,6 +70,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $errors[] = 'Expiry date is required.';
         if (!empty($issueDate) && !empty($expiryDate) && $expiryDate <= $issueDate)
             $errors[] = 'Expiry date must be after issue date.';
+        if (!empty($renewalCost) && (!is_numeric($renewalCost) || (float)$renewalCost < 0))
+            $errors[] = 'Renewal cost must be a non-negative number.';
 
         // File upload (optional)
         $documentFilePath = null;
@@ -94,7 +96,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!is_dir($uploadDir)) {
                     mkdir($uploadDir, 0755, true);
                 }
-                $fileName = 'compliance_' . $vehicleId . '_' . $complianceType . '_' . date('Ymd_His') . '.' . $ext;
+                // Safe filename: sanitize vehicle/type to alphanumeric+dash only
+                $safeVehicleId    = preg_replace('/[^a-zA-Z0-9\-]/', '_', $vehicleId);
+                $safeCompType     = preg_replace('/[^a-zA-Z0-9\-_]/', '_', $complianceType);
+                $fileName = 'compliance_' . $safeVehicleId . '_' . $safeCompType . '_' . date('Ymd_His') . '.' . $ext;
                 $dest = $uploadDir . $fileName;
 
                 if (move_uploaded_file($file['tmp_name'], $dest)) {
@@ -135,14 +140,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $renewalCost !== '' ? (float) $renewalCost : null,
                         $documentFilePath,
                         $notes ?: null,
-                        $_SESSION['user_id'],
+                        $authUser->getId(),
                     ]
                 );
 
                 // Audit log
                 if (class_exists('AuditLogger')) {
                     AuditLogger::log(
-                        $_SESSION['user_id'],
+                        $authUser->getId(),
                         null,
                         null,
                         'create',
@@ -168,7 +173,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } catch (Exception $e) {
                 $db->rollBack();
                 error_log('Compliance insert error: ' . $e->getMessage());
-                $errors[] = 'Failed to archive instrument. Please try again.';
+                $errors[] = $e->getMessage();
             }
         }
     }
@@ -186,7 +191,7 @@ $complianceConfig = [
     'emission_test'           => ['icon'=>'wind','color'=>'#10b981','authority'=>'DENR-Accredited Emission Testing Center','docLabel'=>'Certificate Number','placeholder'=>'e.g. EMT-2024-XXXXX'],
     'franchise_ltfrb'         => ['icon'=>'clipboard-list','color'=>'#f59e0b','authority'=>'Land Transportation Franchising and Regulatory Board (LTFRB)','docLabel'=>'Certificate of Public Convenience No.','placeholder'=>'e.g. CPC-LTFRB-XXXXX'],
     'pnp_clearance'           => ['icon'=>'badge','color'=>'#ef4444','authority'=>'Philippine National Police (PNP)','docLabel'=>'Clearance Certificate No.','placeholder'=>'e.g. PNP-CLR-2024-XXXXX'],
-    'mayors_permit'           => ['icon'=>'building','color'=>'#f97316','authority'=>"City Mayor's Office – General Santos City",'docLabel'>"Mayor's Permit No.",'placeholder'=>'e.g. MP-2024-XXXXX'],
+    'mayors_permit'           => ['icon'=>'building','color'=>'#f97316','authority'=>"City Mayor's Office – General Santos City",'docLabel'=>"Mayor's Permit No.",'placeholder'=>'e.g. MP-2024-XXXXX'],
 ];
 ?>
 

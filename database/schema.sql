@@ -59,7 +59,8 @@ CREATE TABLE `audit_logs` (
   KEY `idx_record` (`record_id`),
   KEY `idx_timestamp` (`action_timestamp`),
   KEY `idx_severity` (`severity`),
-  FULLTEXT KEY `idx_description` (`record_description`)
+  FULLTEXT KEY `idx_description` (`record_description`),
+  CONSTRAINT `audit_logs_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
 ) ENGINE=InnoDB AUTO_INCREMENT=19 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='System audit trail';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -335,8 +336,10 @@ CREATE TABLE `maintenance_schedules` (
   KEY `idx_status` (`status`),
   KEY `idx_next_due` (`next_due_date`),
   KEY `created_by` (`created_by`),
+  KEY `fk_ms_last_maintenance` (`last_maintenance_id`),
   CONSTRAINT `maintenance_schedules_ibfk_1` FOREIGN KEY (`vehicle_id`) REFERENCES `vehicles` (`vehicle_id`) ON DELETE CASCADE,
-  CONSTRAINT `maintenance_schedules_ibfk_2` FOREIGN KEY (`created_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+  CONSTRAINT `maintenance_schedules_ibfk_2` FOREIGN KEY (`created_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `maintenance_schedules_ibfk_3` FOREIGN KEY (`last_maintenance_id`) REFERENCES `maintenance_logs` (`log_id`) ON DELETE SET NULL
 ) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Preventive maintenance schedules';
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!50003 SET @saved_cs_client      = @@character_set_client */ ;
@@ -766,7 +769,9 @@ CREATE TABLE `system_settings` (
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`setting_id`),
   UNIQUE KEY `setting_key` (`setting_key`),
-  KEY `idx_key` (`setting_key`)
+  KEY `idx_key` (`setting_key`),
+  KEY `fk_system_settings_updated_by` (`updated_by`),
+  CONSTRAINT `system_settings_ibfk_1` FOREIGN KEY (`updated_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
 ) ENGINE=InnoDB AUTO_INCREMENT=26 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -957,8 +962,12 @@ CREATE TABLE `vehicle_status_logs` (
   KEY `idx_changed_at` (`changed_at`),
   KEY `idx_new_status` (`new_status`),
   KEY `changed_by` (`changed_by`),
+  KEY `fk_vsl_rental` (`related_rental_id`),
+  KEY `fk_vsl_maintenance` (`related_maintenance_id`),
   CONSTRAINT `vehicle_status_logs_ibfk_1` FOREIGN KEY (`vehicle_id`) REFERENCES `vehicles` (`vehicle_id`) ON DELETE CASCADE,
-  CONSTRAINT `vehicle_status_logs_ibfk_2` FOREIGN KEY (`changed_by`) REFERENCES `users` (`user_id`)
+  CONSTRAINT `vehicle_status_logs_ibfk_2` FOREIGN KEY (`changed_by`) REFERENCES `users` (`user_id`),
+  CONSTRAINT `vehicle_status_logs_ibfk_3` FOREIGN KEY (`related_rental_id`) REFERENCES `rental_agreements` (`agreement_id`) ON DELETE SET NULL,
+  CONSTRAINT `vehicle_status_logs_ibfk_4` FOREIGN KEY (`related_maintenance_id`) REFERENCES `maintenance_logs` (`log_id`) ON DELETE SET NULL
 ) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Vehicle status change audit trail';
 /*!40101 SET character_set_client = @saved_cs_client */;
 

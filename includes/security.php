@@ -79,12 +79,21 @@ function checkRateLimit($identifier, $maxAttempts = 5, $window = 3600)
 
 /**
  * Encrypt sensitive data
+ *
+ * Uses OPENSSL_RAW_DATA so both the IV (16 bytes) and ciphertext are raw binary.
+ * They are concatenated and then base64-encoded together, ensuring decryption
+ * can correctly split the IV from the ciphertext by byte offset.
  */
 function encryptData($data, $key = null)
 {
     $key = $key ?? (defined('ENCRYPTION_KEY') ? ENCRYPTION_KEY : 'default_key');
-    $iv = random_bytes(16);
-    $encrypted = openssl_encrypt($data, 'AES-256-CBC', $key, 0, $iv);
+    $iv  = random_bytes(16);
+    // OPENSSL_RAW_DATA → returns raw binary, not base64
+    $encrypted = openssl_encrypt($data, 'AES-256-CBC', $key, OPENSSL_RAW_DATA, $iv);
+    if ($encrypted === false) {
+        throw new Exception('Encryption failed.');
+    }
+    // Prepend raw IV to raw ciphertext, then base64 the whole thing
     return base64_encode($iv . $encrypted);
 }
 
@@ -94,10 +103,14 @@ function encryptData($data, $key = null)
 function decryptData($data, $key = null)
 {
     $key = $key ?? (defined('ENCRYPTION_KEY') ? ENCRYPTION_KEY : 'default_key');
-    $data = base64_decode($data);
-    $iv = substr($data, 0, 16);
-    $encrypted = substr($data, 16);
-    return openssl_decrypt($encrypted, 'AES-256-CBC', $key, 0, $iv);
+    $raw = base64_decode($data, true);
+    if ($raw === false || strlen($raw) <= 16) {
+        return false; // Malformed payload
+    }
+    $iv        = substr($raw, 0, 16);   // First 16 raw bytes = IV
+    $encrypted = substr($raw, 16);      // Remainder = raw ciphertext
+    $decrypted = openssl_decrypt($encrypted, 'AES-256-CBC', $key, OPENSSL_RAW_DATA, $iv);
+    return $decrypted; // Returns false on failure
 }
 
 /**

@@ -20,8 +20,20 @@ class Inventory
     // -------------------------------------------------------
     public function create(array $data, int $createdBy): int
     {
-        $count = (int) $this->db->fetchColumn("SELECT COUNT(*) FROM parts_inventory");
-        $itemCode = 'INV-' . str_pad($count + 1, 4, '0', STR_PAD_LEFT);
+        // If no item_code was provided, auto-generate one using MAX to avoid collisions
+        if (empty($data['item_code'])) {
+            $maxId = (int) $this->db->fetchColumn("SELECT COALESCE(MAX(inventory_id), 0) FROM parts_inventory");
+            $data['item_code'] = 'INV-' . str_pad($maxId + 1, 4, '0', STR_PAD_LEFT);
+        }
+
+        // Final guard: ensure the code doesn't already exist (race condition safety)
+        $existing = $this->db->fetchOne(
+            "SELECT inventory_id FROM parts_inventory WHERE item_code = ?",
+            [$data['item_code']]
+        );
+        if ($existing) {
+            throw new Exception("Item Code '{$data['item_code']}' already exists. Please use a unique code.");
+        }
 
         $id = (int) $this->db->insert(
             "INSERT INTO parts_inventory
@@ -29,7 +41,7 @@ class Inventory
               reorder_level, unit_cost, supplier_id, storage_location, notes, created_by)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
-                $itemCode,
+                $data['item_code'],
                 $data['item_name'],
                 $data['item_category'] ?? 'parts',
                 $data['unit'] ?? 'pcs',
@@ -252,12 +264,39 @@ class Inventory
         if (!empty($filters['low_stock'])) {
             $where[] = 'pi.quantity_on_hand <= pi.reorder_level AND pi.reorder_level > 0';
         }
+        if (!empty($filters['on_order'])) {
+            $where[] = "pi.inventory_id IN (
+                SELECT pinv.inventory_id
+                FROM procurement_items pli 
+                JOIN procurement_requests pr ON pli.pr_id = pr.pr_id 
+                JOIN parts_inventory pinv ON pli.item_description = pinv.item_name
+                WHERE pr.status IN ('ordered', 'approved', 'partially_received')
+            )";
+        }
 
         $whereClause = implode(' AND ', $where);
         $total = (int) $this->db->fetchColumn(
             "SELECT COUNT(*) FROM parts_inventory pi WHERE {$whereClause}",
             $params
         );
+
+        $sortBy = 'pi.item_name';
+        $sortOrder = 'ASC';
+
+        if (!empty($filters['sort_by'])) {
+            $allowedSorts = ['pi.item_code', 'pi.item_name', 'pi.item_category', 'pi.quantity_on_hand', 'pi.reorder_level', 'pi.unit_cost'];
+            $sortByParam = $filters['sort_by'];
+            if (strpos($sortByParam, '.') === false && in_array('pi.' . $sortByParam, $allowedSorts)) {
+                $sortByParam = 'pi.' . $sortByParam;
+            }
+            if (in_array($sortByParam, $allowedSorts)) {
+                $sortBy = $sortByParam;
+            }
+        }
+
+        if (!empty($filters['sort_order']) && in_array(strtoupper($filters['sort_order']), ['ASC', 'DESC'])) {
+            $sortOrder = strtoupper($filters['sort_order']);
+        }
 
         $offset = ($page - 1) * $perPage;
         $rows = $this->db->fetchAll(
@@ -266,7 +305,7 @@ class Inventory
              FROM parts_inventory pi
              LEFT JOIN suppliers s ON pi.supplier_id = s.supplier_id
              WHERE {$whereClause}
-             ORDER BY pi.item_category, pi.item_name
+             ORDER BY {$sortBy} {$sortOrder}
              LIMIT " . (int)$perPage . " OFFSET " . (int)$offset,
             $params
         );

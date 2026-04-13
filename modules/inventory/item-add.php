@@ -2,9 +2,10 @@
 require_once '../../config/config.php';
 require_once '../../includes/session-manager.php';
 
-$pageTitle = 'Add Inventory Item';
+// Auth guard before any DB work or HTML output
 $authUser->requirePermission('inventory.create');
 
+$pageTitle = 'Add Inventory Item';
 $db = Database::getInstance();
 $suppliers = $db->fetchAll("SELECT supplier_id, company_name FROM suppliers WHERE is_active = 1 AND deleted_at IS NULL ORDER BY company_name");
 
@@ -44,7 +45,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         elseif (empty($data['unit']))
             $error = 'Unit is required.';
 
-        // Check if item_code is unique (assuming Inventory class has this check, or we do it here)
+        // --- Server-side enum validation ---
+        $allowedCategories = ['parts', 'supplies', 'fuel', 'others'];
+        if (!in_array($data['item_category'], $allowedCategories, true))
+            $data['item_category'] = 'parts'; // sanitize to default
+
+        // --- Numeric field guards ---
+        if ($data['quantity_on_hand'] !== '' && (!is_numeric($data['quantity_on_hand']) || (float)$data['quantity_on_hand'] < 0))
+            $error = 'Current stock quantity must be a non-negative number.';
+        elseif ($data['reorder_level'] !== '' && (!is_numeric($data['reorder_level']) || (float)$data['reorder_level'] < 0))
+            $error = 'Reorder level must be a non-negative number.';
+        elseif (!empty($data['unit_cost']) && (!is_numeric($data['unit_cost']) || (float)$data['unit_cost'] < 0))
+            $error = 'Unit cost must be a non-negative number.';
+
+        // --- Supplier ID whitelist ---
+        if (!$error && !empty($data['supplier_id'])) {
+            $validSupplierIds = array_column($suppliers, 'supplier_id');
+            if (!in_array($data['supplier_id'], $validSupplierIds)) {
+                $error = 'Invalid supplier selected.';
+            }
+        }
+
+        // Check if item_code is unique
         if (!$error && !empty($data['item_code'])) {
             $existing = $db->fetchOne("SELECT inventory_id FROM parts_inventory WHERE item_code = ?", [$data['item_code']]);
             if ($existing) {
@@ -83,7 +105,7 @@ require_once '../../includes/header.php';
     </div>
 </div>
 
-<form method="POST" style="max-width:720px;">
+<form method="POST" style="max-width:720px;" class="needs-validation" novalidate>
     <?= csrfField() ?>
 
     <?php if ($error): ?>

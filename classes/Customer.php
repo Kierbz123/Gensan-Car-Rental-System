@@ -29,6 +29,16 @@ class Customer
             }
         }
 
+        // Validate email format if provided
+        if (!empty($data['email']) && !filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
+            throw new Exception("Invalid email address format.");
+        }
+
+        // Validate phone_primary length (max 20 chars to match DB column)
+        if (strlen($data['phone_primary']) > 20) {
+            throw new Exception("Primary phone number is too long (max 20 characters).");
+        }
+
         // Generate customer code
         $customerCode = $this->generateCustomerCode();
 
@@ -38,14 +48,17 @@ class Customer
         $profilePicturePath = null;
 
         if (!empty($data['id_photo_front']) && $data['id_photo_front']['tmp_name']) {
+            $this->validateUploadedFile($data['id_photo_front']);
             $idFrontPath = $this->uploadIDPhoto($data['id_photo_front'], $customerCode, 'front');
         }
 
         if (!empty($data['id_photo_back']) && $data['id_photo_back']['tmp_name']) {
+            $this->validateUploadedFile($data['id_photo_back']);
             $idBackPath = $this->uploadIDPhoto($data['id_photo_back'], $customerCode, 'back');
         }
 
         if (!empty($data['profile_picture']) && $data['profile_picture']['tmp_name']) {
+            $this->validateUploadedFile($data['profile_picture'], ['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
             $profilePicturePath = $this->uploadProfilePicture($data['profile_picture'], $customerCode);
         }
 
@@ -66,7 +79,7 @@ class Customer
                 $data['first_name'],
                 $data['last_name'],
                 $data['middle_name'] ?? null,
-                $data['date_of_birth'] ?? null,
+                !empty($data['date_of_birth']) ? $data['date_of_birth'] : null,
                 $data['gender'] ?? null,
                 $data['phone_primary'],
                 $data['phone_secondary'] ?? null,
@@ -588,6 +601,77 @@ class Customer
     }
 
     /**
+     * Get aggregate statistics for the dashboard
+     */
+    public function getStats()
+    {
+        return $this->db->fetchOne("
+            SELECT 
+                COUNT(*) as total,
+                COALESCE(SUM(CASE WHEN customer_type = 'corporate' THEN 1 ELSE 0 END), 0) as corporate,
+                COALESCE(SUM(CASE WHEN customer_type != 'corporate' THEN 1 ELSE 0 END), 0) as individual,
+                COALESCE(SUM(CASE WHEN is_blacklisted = 1 THEN 1 ELSE 0 END), 0) as blacklisted
+            FROM customers WHERE deleted_at IS NULL
+        ");
+    }
+
+    /**
+     * Retrieve paginated clients with advanced sorting algorithms mapped.
+     */
+    public function getAll($filters = [], $page = 1, $perPage = 10)
+    {
+        $where = ["deleted_at IS NULL"];
+        $params = [];
+
+        if (!empty($filters['type'])) {
+            $where[] = "customer_type = ?";
+            $params[] = $filters['type'];
+        }
+
+        if (!empty($filters['blacklisted'])) {
+            $where[] = "is_blacklisted = 1";
+        }
+
+        if (!empty($filters['search'])) {
+            $where[] = "(first_name LIKE ? OR last_name LIKE ? OR customer_code LIKE ? OR email LIKE ? OR phone_primary LIKE ?)";
+            $s = "%" . $filters['search'] . "%";
+            $params = array_merge($params, [$s, $s, $s, $s, $s]);
+        }
+
+        $whereClause = implode(' AND ', $where);
+
+        $sortBy = 'created_at';
+        $sortOrder = 'DESC';
+
+        if (!empty($filters['sort_by'])) {
+            $allowedSorts = ['first_name', 'phone_primary', 'id_type', 'customer_type', 'is_blacklisted'];
+            if (in_array($filters['sort_by'], $allowedSorts)) {
+                $sortBy = $filters['sort_by'];
+            }
+        }
+
+        if (!empty($filters['sort_order']) && in_array(strtoupper($filters['sort_order']), ['ASC', 'DESC'])) {
+            $sortOrder = strtoupper($filters['sort_order']);
+        }
+
+        $totalCount = (int) ($this->db->fetchColumn("SELECT COUNT(*) FROM customers WHERE $whereClause", $params) ?? 0);
+        $offset = ($page - 1) * $perPage;
+
+        $customers = $this->db->fetchAll(
+            "SELECT * FROM customers WHERE $whereClause ORDER BY {$sortBy} {$sortOrder} LIMIT ? OFFSET ?",
+            array_merge($params, [$perPage, $offset])
+        ) ?: [];
+
+        return [
+            'data' => $customers,
+            'total' => $totalCount,
+            'page' => $page,
+            'per_page' => $perPage,
+            'total_pages' => $totalCount > 0 ? ceil($totalCount / $perPage) : 1
+        ];
+    }
+
+    /**
      * Generate customer code
      */
     private function generateCustomerCode()
@@ -616,6 +700,29 @@ class Customer
 
         $sequence = str_pad($result['next_seq'], 4, '0', STR_PAD_LEFT);
         return "RA-GCR-{$year}-{$sequence}";
+    }
+
+    /**
+     * Validate an uploaded file for type and size
+     */
+    private function validateUploadedFile($file, $allowedTypes = null)
+    {
+        if ($allowedTypes === null) {
+            $allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'];
+        }
+
+        // Use finfo for reliable MIME detection (not the browser-supplied type)
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $detectedType = finfo_file($finfo, $file['tmp_name']);
+        finfo_close($finfo);
+
+        if (!in_array($detectedType, $allowedTypes, true)) {
+            throw new Exception("Invalid file type ({$detectedType}). Allowed: " . implode(', ', $allowedTypes));
+        }
+
+        if ($file['size'] > MAX_UPLOAD_SIZE) {
+            throw new Exception("File size exceeds the maximum limit of " . (MAX_UPLOAD_SIZE / 1024 / 1024) . " MB.");
+        }
     }
 
     /**

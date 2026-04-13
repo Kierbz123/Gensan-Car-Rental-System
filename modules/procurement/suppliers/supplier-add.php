@@ -1,35 +1,67 @@
 <?php
 /**
- * Add Supplier
+ * Add Supplier (Procurement module entry point)
  * Path: modules/procurement/suppliers/supplier-add.php
+ * NOTE: Delegates entirely to Supplier::create() for consistency and audit logging.
  */
 require_once '../../../config/config.php';
 require_once '../../../includes/session-manager.php';
 $authUser->requirePermission('procurement.create');
-$db = Database::getInstance();
-$errors = [];
+
+$errors  = [];
+$allowed_payment_terms = ['cod', 'net15', 'net30', 'prepaid'];
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!validateCsrfToken($_POST['csrf_token'] ?? '')) {
-        $errors[] = 'Invalid token.';
-    } elseif (empty(trim($_POST['company_name'] ?? ''))) {
-        $errors[] = 'Company name required.';
+        $errors[] = 'Invalid security token.';
     } else {
-        try {
-            $db->insert(
-                "INSERT INTO suppliers (company_name,contact_person,email,phone,address,categories,payment_terms,notes,is_active) VALUES (?,?,?,?,?,?,?,?,1)",
-                [$_POST['company_name'], $_POST['contact_person'] ?? null, $_POST['email'] ?? null, $_POST['phone'] ?? null, $_POST['address'] ?? null, $_POST['categories'] ?? null, $_POST['payment_terms'] ?? 'cod', $_POST['notes'] ?? null]
-            );
-            $_SESSION['success_message'] = 'Supplier added.';
-            header('Location: index.php');
-            exit;
-        } catch (Exception $e) {
-            $errors[] = $e->getMessage();
+        $companyName  = trim($_POST['company_name'] ?? '');
+        $contactPerson = trim($_POST['contact_person'] ?? '');
+        $email        = trim($_POST['email'] ?? '');
+        $phone        = trim($_POST['phone'] ?? '');
+        $address      = trim($_POST['address'] ?? '');
+        $paymentTerms = $_POST['payment_terms'] ?? 'cod';
+        $categories   = trim($_POST['categories'] ?? '');
+        $notes        = trim($_POST['notes'] ?? '');
+
+        if (empty($companyName))
+            $errors[] = 'Company name is required.';
+        elseif (!empty($email) && !filter_var($email, FILTER_VALIDATE_EMAIL))
+            $errors[] = 'Please enter a valid email address.';
+        elseif (!in_array($paymentTerms, $allowed_payment_terms, true))
+            $errors[] = 'Invalid payment terms selected.';
+
+        if (empty($errors)) {
+            try {
+                $supplier = new Supplier();
+                // Map the simplified form fields to the full Supplier::create() schema
+                $supplierData = [
+                    'company_name'   => $companyName,
+                    'contact_person' => $contactPerson ?: null,
+                    'email'          => $email ?: null,
+                    'phone_primary'  => $phone ?: '',
+                    'address'        => $address ?: '',
+                    'category'       => 'others', // simplified form has no category selector
+                    'payment_terms'  => $paymentTerms,
+                    'notes'          => $notes ?: null,
+                    'is_active'      => 1,
+                ];
+                $newId = $supplier->create($supplierData, $authUser->getId());
+                $_SESSION['success_message'] = 'Supplier added.';
+                header('Location: index.php');
+                exit;
+            } catch (Exception $e) {
+                error_log("Supplier creation failed: " . $e->getMessage());
+                $errors[] = $e->getMessage();
+            }
         }
     }
 }
+
 $pageTitle = 'Add Supplier';
 require_once '../../../includes/header.php';
 ?>
+
 <div class="fade-in max-w-2xl mx-auto">
     <div class="flex items-center gap-3 mb-8 text-[10px] font-black uppercase tracking-widest"><a href="index.php"
             class="text-secondary-400 hover:text-primary-600">Suppliers</a><span

@@ -67,17 +67,18 @@ class ProcurementRequest
                 $this->db->execute(
                     "INSERT INTO procurement_items 
                      (pr_id, line_number, item_description, item_category, specification,
-                      quantity, unit, estimated_unit_cost, supplier_id, vehicle_id, purpose)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                      quantity, unit, estimated_unit_cost, estimated_total_cost, supplier_id, vehicle_id, purpose)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     [
                         $prId,
                         $lineNumber++,
                         $item['description'],
-                        $item['category'] ?? 'parts',
+                        $item['category'] ?? 'other',
                         $item['specification'] ?? null,
                         $item['quantity'],
                         $item['unit'],
                         $item['estimated_unit_cost'],
+                        $item['quantity'] * $item['estimated_unit_cost'],
                         $item['supplier_id'] ?? null,
                         $item['vehicle_id'] ?? null,
                         $item['purpose'] ?? null
@@ -334,7 +335,7 @@ class ProcurementRequest
     /**
      * Get all PRs with filtering
      */
-    public function getAll($filters = [], $page = 1, $perPage = ITEMS_PER_PAGE)
+    public function getAll($filters = [], $page = 1, $perPage = ITEMS_PER_PAGE): array
     {
         $where = ["1=1"];
         $params = [];
@@ -369,6 +370,13 @@ class ProcurementRequest
             $params[] = $filters['date_to'];
         }
 
+        if (!empty($filters['search'])) {
+            $searchTerm = '%' . $filters['search'] . '%';
+            $where[] = "(pr.pr_number LIKE ? OR CONCAT(u.first_name, ' ', u.last_name) LIKE ?)";
+            $params[] = $searchTerm;
+            $params[] = $searchTerm;
+        }
+
         // Pending approval filter for current user
         if (!empty($filters['pending_my_approval'])) {
             $userRole = $this->db->fetchColumn("SELECT role FROM users WHERE user_id = ?", [$filters['pending_my_approval']]);
@@ -391,7 +399,9 @@ class ProcurementRequest
         $whereClause = implode(' AND ', $where);
 
         $count = $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM procurement_requests pr WHERE {$whereClause}",
+            "SELECT COUNT(*) FROM procurement_requests pr 
+             LEFT JOIN users u ON pr.requestor_id = u.user_id 
+             WHERE {$whereClause}",
             $params
         );
 

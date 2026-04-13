@@ -19,9 +19,27 @@ class Driver
     // -------------------------------------------------------
     public function create(array $data, int $createdBy): int
     {
-        // Auto-generate employee code safely (avoid collision on deletion)
-        $maxId = (int) $this->db->fetchColumn("SELECT COALESCE(MAX(driver_id), 0) FROM drivers");
-        $code = 'DRV-' . str_pad($maxId + 1, 4, '0', STR_PAD_LEFT);
+        // Check for duplicate license number before inserting
+        $existing = $this->db->fetchColumn(
+            "SELECT COUNT(*) FROM drivers WHERE license_number = ? AND deleted_at IS NULL",
+            [$data['license_number']]
+        );
+        if ($existing > 0) {
+            throw new Exception("A driver with license number '{$data['license_number']}' is already registered.");
+        }
+
+        // Validate email format if provided
+        if (!empty($data['email']) && !filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
+            throw new Exception("Invalid email address format.");
+        }
+
+        // Auto-generate employee code — use count + timestamp suffix to avoid collisions on deletion
+        $count = (int) $this->db->fetchColumn("SELECT COUNT(*) FROM drivers");
+        $code  = 'DRV-' . str_pad($count + 1, 4, '0', STR_PAD_LEFT);
+        // Guarantee uniqueness in case of concurrent inserts
+        while ($this->db->fetchColumn("SELECT COUNT(*) FROM drivers WHERE employee_code = ?", [$code]) > 0) {
+            $code = 'DRV-' . str_pad(++$count + 1, 4, '0', STR_PAD_LEFT);
+        }
 
         // Handle profile photo upload
         $profilePhotoPath = null;
@@ -225,8 +243,8 @@ class Driver
              FROM drivers d
              WHERE {$whereClause}
              ORDER BY d.last_name, d.first_name
-             LIMIT " . (int)$perPage . " OFFSET " . (int)$offset,
-            $params
+             LIMIT ? OFFSET ?",
+            array_merge($params, [(int)$perPage, (int)$offset])
         );
 
         return [
@@ -317,8 +335,13 @@ class Driver
     // -------------------------------------------------------
     private function uploadProfilePhoto(array $file, string $code): string
     {
+        // Use finfo for server-side MIME detection — browser-supplied $file['type'] is spoofable
         $allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-        if (!in_array($file['type'], $allowed)) {
+        $finfo   = finfo_open(FILEINFO_MIME_TYPE);
+        $detectedType = finfo_file($finfo, $file['tmp_name']);
+        finfo_close($finfo);
+
+        if (!in_array($detectedType, $allowed, true)) {
             throw new Exception('Invalid image type. Allowed: JPG, PNG, GIF, WebP.');
         }
         if ($file['size'] > 5 * 1024 * 1024) {

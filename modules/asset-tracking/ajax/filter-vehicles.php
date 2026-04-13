@@ -30,7 +30,7 @@ if ($categoryId) {
     $params[] = $categoryId;
 }
 if ($search) {
-    $where[] = '(v.plate_number LIKE ? OR v.brand LIKE ? OR v.model LIKE ? OR v.vehicle_code LIKE ?)';
+    $where[] = '(v.vehicle_id LIKE ? OR v.plate_number LIKE ? OR v.brand LIKE ? OR v.model LIKE ?)';
     $s = "%{$search}%";
     $params = array_merge($params, [$s, $s, $s, $s]);
 }

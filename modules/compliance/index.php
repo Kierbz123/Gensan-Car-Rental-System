@@ -8,116 +8,123 @@ require_once '../../includes/header.php';
 
 $authUser->requirePermission('compliance.view');
 
-$sort = $_GET['sort'] ?? 'urgency';
-$search = $_GET['search'] ?? '';
-$type = $_GET['type'] ?? '';
-$viewMode = $_GET['view_mode'] ?? 'critical';
-$page = max(1, filter_input(INPUT_GET, 'page', FILTER_VALIDATE_INT) ?: 1);
-$perPage = 25;
-$offset = ($page - 1) * $perPage;
-
 try {
-    // 1. Stats Grid (Global Fleet Health)
-    $stats = $db->fetchOne("
-        SELECT 
-            COUNT(*) as total_records,
-            COALESCE(SUM(CASE WHEN expiry_date > DATE_ADD(CURRENT_DATE(), INTERVAL 30 DAY) THEN 1 ELSE 0 END), 0) as total_active,
-            COALESCE(SUM(CASE WHEN expiry_date < CURRENT_DATE() THEN 1 ELSE 0 END), 0) as expired,
-            COALESCE(SUM(CASE WHEN expiry_date >= CURRENT_DATE() AND expiry_date <= DATE_ADD(CURRENT_DATE(), INTERVAL 30 DAY) THEN 1 ELSE 0 END), 0) as expiring_soon
-        FROM compliance_records c
-        WHERE status != 'renewed' AND status != 'cancelled'
-          AND record_id = (
-              SELECT MAX(record_id)
-              FROM compliance_records c2
-              WHERE c2.vehicle_id = c.vehicle_id AND c2.compliance_type = c.compliance_type
-          )
-    ");
+    $compObj = new ComplianceRecord();
+    $stats = $compObj->getStats();
 
-    $totalRecords = $stats['total_records'] ?: 1; // Prevent division by zero
+    $filters = [];
+    if (!empty($_GET['search'])) $filters['search'] = $_GET['search'];
+    if (!empty($_GET['status'])) $filters['status'] = $_GET['status'];
+    if (!empty($_GET['type'])) $filters['type'] = $_GET['type'];
+    if (!empty($_GET['sort_by'])) $filters['sort_by'] = $_GET['sort_by'];
+    if (!empty($_GET['sort_order'])) $filters['sort_order'] = $_GET['sort_order'];
+
+    $page = max(1, intval($_GET['page'] ?? 1));
+    $result = $compObj->getAll($filters, $page, 25);
+    $items = $result['data'] ?? [];
+    $totalPages = $result['total_pages'];
+
+    $totalRecords = max(1, $stats['total_records']);
     $systemicScore = round(($stats['total_active'] / $totalRecords) * 100);
 
-    // 2. Critical Watchlist (Filtered results)
-    $where = ["c.status NOT IN ('renewed', 'cancelled')"];
-    $params = [];
-
-    // Filter by View Mode
-    if ($viewMode === 'critical') {
-        $where[] = "c.expiry_date <= DATE_ADD(CURRENT_DATE(), INTERVAL 30 DAY)";
-    }
-
-    // Filter by Type
-    if (!empty($type)) {
-        $where[] = "c.compliance_type = ?";
-        $params[] = $type;
-    }
-
-    // Filter by Search (Plate/Brand/Model)
-    if (!empty($search)) {
-        $where[] = "(v.plate_number LIKE ? OR v.brand LIKE ? OR v.model LIKE ? OR c.document_number LIKE ?)";
-        $searchParam = "%{$search}%";
-        $params[] = $searchParam;
-        $params[] = $searchParam;
-        $params[] = $searchParam;
-        $params[] = $searchParam;
-    }
-
-    // Subquery for the most recent record of each type per vehicle
-    $where[] = "c.record_id = (
-        SELECT MAX(record_id) 
-        FROM compliance_records c2 
-        WHERE c2.vehicle_id = c.vehicle_id AND c2.compliance_type = c.compliance_type
-    )";
-
-    $whereClause = implode(' AND ', $where);
-
-    // Get Total Count for Pagination
-    $totalFiltered = $db->fetchColumn("
-        SELECT COUNT(*) 
-        FROM compliance_records c
-        JOIN vehicles v ON c.vehicle_id = v.vehicle_id
-        WHERE $whereClause
-    ", $params);
-
-    $totalPages = ceil($totalFiltered / $perPage);
-
-    // Order Clause
-    $orderClause = "ORDER BY CASE WHEN c.expiry_date < CURRENT_DATE() THEN 1 ELSE 2 END ASC, c.expiry_date ASC";
-    if ($sort === 'expiry') {
-        $orderClause = "ORDER BY c.expiry_date ASC";
-    } elseif ($sort === 'vehicle') {
-        $orderClause = "ORDER BY v.brand ASC, v.model ASC, c.expiry_date ASC";
-    } elseif ($sort === 'type') {
-        $orderClause = "ORDER BY c.compliance_type ASC, c.expiry_date ASC";
-    }
-
-    $items = $db->fetchAll("
-        SELECT c.*, v.plate_number, v.brand, v.model
-        FROM compliance_records c
-        JOIN vehicles v ON c.vehicle_id = v.vehicle_id
-        WHERE $whereClause
-        $orderClause
-        LIMIT " . (int) $perPage . " OFFSET " . (int) $offset, 
-        $params
-    );
-
-    // 3. Compliance History (Event Drawer)
-    $history = $db->fetchAll("
-        SELECT c.*, v.plate_number, v.brand, v.model
-        FROM compliance_records c
-        JOIN vehicles v ON c.vehicle_id = v.vehicle_id
-        ORDER BY c.created_at DESC
-        LIMIT 15
-    ");
+    // Fetch Recent History (Last 15 records) for Sidebar tracking search context
+    $historyFilters = [];
+    if (!empty($_GET['search'])) $historyFilters['search'] = $_GET['search'];
+    $history = $compObj->getRecentHistory($historyFilters);
 
 } catch (Exception $e) {
+    if (empty($_SESSION['error_message'])) {
+        $_SESSION['error_message'] = "Failed to load compliance data: " . $e->getMessage();
+    }
     $stats = ['total_active' => 0, 'expired' => 0, 'expiring_soon' => 0];
     $items = [];
     $history = [];
     $systemicScore = 100;
-    $totalFiltered = 0;
     $totalPages = 1;
 }
+
+$currentSortBy = $filters['sort_by'] ?? '';
+$currentSortOrder = $filters['sort_order'] ?? '';
+
+function buildSortUrl($field, $currentSortBy, $currentSortOrder) {
+    $order = ($currentSortBy === $field && strtoupper($currentSortOrder) === 'ASC') ? 'DESC' : 'ASC';
+    $params = $_GET;
+    $params['sort_by'] = $field;
+    $params['sort_order'] = $order;
+    unset($params['page']);
+    return '?' . http_build_query($params);
+}
+
+function getSortIcon($field, $currentSortBy, $currentSortOrder) {
+    if ($currentSortBy === $field) {
+        $iconName = strtoupper($currentSortOrder) === 'ASC' ? 'chevron-up' : 'chevron-down';
+        return '<i data-lucide="' . $iconName . '" style="width:14px;height:14px;display:inline-block;vertical-align:middle;margin-left:4px;"></i>';
+    }
+    return '';
+}
+
+function buildStatUrl($statusValue) {
+    $params = $_GET;
+    if (!empty($params['status']) && $params['status'] === $statusValue) {
+        unset($params['status']);
+    } else {
+        $params['status'] = $statusValue;
+    }
+    unset($params['page']);
+    return '?' . http_build_query($params);
+}
+
+$successMsg = '';
+if (!empty($_SESSION['success_message'])) {
+    $successMsg = $_SESSION['success_message'];
+    unset($_SESSION['success_message']);
+}
 ?>
+
+<style>
+.stat-card-link {
+    text-decoration: none;
+    color: inherit;
+    display: block;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+.stat-card-link:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+.stat-card.active-expired {
+    border-color: var(--danger) !important;
+    box-shadow: 0 0 0 1px var(--danger) !important;
+}
+.stat-card.active-critical {
+    border-color: var(--warning) !important;
+    box-shadow: 0 0 0 1px var(--warning) !important;
+}
+.stat-card.active-valid {
+    border-color: var(--primary-color) !important;
+    box-shadow: 0 0 0 1px var(--primary-color) !important;
+}
+.sortable-header {
+    cursor: pointer;
+    text-decoration: none;
+    color: inherit;
+    user-select: none;
+}
+.sortable-header:hover {
+    color: var(--primary-color);
+}
+.empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: var(--text-muted);
+}
+.empty-state-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 1rem;
+    opacity: 0.5;
+}
+</style>
 
 <div class="page-header">
     <div style="display:flex;align-items:center;justify-content:space-between;width:100%;">
@@ -149,22 +156,28 @@ try {
 </div>
 
 <div class="stats-grid">
-    <div class="stat-card">
-        <div class="stat-card-icon danger"><i data-lucide="shield-alert" style="width:20px;height:20px;"></i></div>
-        <div class="stat-value"><?= $stats['expired'] ?? 0 ?></div>
-        <div class="stat-label">Breached Instruments</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-card-icon warning"><i data-lucide="timer" style="width:20px;height:20px;"></i></div>
-        <div class="stat-value"><?= $stats['expiring_soon'] ?? 0 ?></div>
-        <div class="stat-label">30-Day Critical</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-card-icon primary"><i data-lucide="file-check" style="width:20px;height:20px;"></i></div>
-        <div class="stat-value"><?= $stats['total_active'] ?? 0 ?></div>
-        <div class="stat-label">Valid Instruments</div>
-    </div>
-    <div class="stat-card">
+    <a href="<?= buildStatUrl('expired') ?>" class="stat-card-link">
+        <div class="stat-card <?= (isset($_GET['status']) && $_GET['status'] === 'expired') ? 'active-expired' : '' ?>">
+            <div class="stat-card-icon danger"><i data-lucide="shield-alert" style="width:20px;height:20px;"></i></div>
+            <div class="stat-value"><?= $stats['expired'] ?? 0 ?></div>
+            <div class="stat-label">Breached Instruments</div>
+        </div>
+    </a>
+    <a href="<?= buildStatUrl('critical') ?>" class="stat-card-link">
+        <div class="stat-card <?= (isset($_GET['status']) && $_GET['status'] === 'critical') ? 'active-critical' : '' ?>">
+            <div class="stat-card-icon warning"><i data-lucide="timer" style="width:20px;height:20px;"></i></div>
+            <div class="stat-value"><?= $stats['expiring_soon'] ?? 0 ?></div>
+            <div class="stat-label">30-Day Critical</div>
+        </div>
+    </a>
+    <a href="<?= buildStatUrl('valid') ?>" class="stat-card-link">
+        <div class="stat-card <?= (isset($_GET['status']) && $_GET['status'] === 'valid') ? 'active-valid' : '' ?>">
+            <div class="stat-card-icon primary"><i data-lucide="file-check" style="width:20px;height:20px;"></i></div>
+            <div class="stat-value"><?= $stats['total_active'] ?? 0 ?></div>
+            <div class="stat-label">Valid Instruments</div>
+        </div>
+    </a>
+    <div class="stat-card" style="cursor:default;">
         <div class="stat-card-icon success"><i data-lucide="award" style="width:20px;height:20px;"></i></div>
         <div class="stat-value"><?= $systemicScore ?>%</div>
         <div class="stat-label">Systemic Score</div>
@@ -172,98 +185,116 @@ try {
 </div>
 
 <div class="card mt-8">
-    <div class="card-header" style="flex-direction:column; align-items:stretch; gap:1.25rem;">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-             <h2 class="card-title" style="margin:0; font-size:1.125rem; display:flex; align-items:center; gap:0.5rem;">
-                <i data-lucide="alert-triangle" style="width:18px;height:18px;color:var(--warning);"></i>
-                Compliance Monitoring
-            </h2>
-            <div style="display:flex; gap:0.5rem;">
-                <a href="?view_mode=critical" class="btn <?= $viewMode === 'critical' ? 'btn-primary' : 'btn-ghost' ?> btn-sm">Critical Watchlist</a>
-                <a href="?view_mode=all" class="btn <?= $viewMode === 'all' ? 'btn-primary' : 'btn-ghost' ?> btn-sm">All Entities</a>
-            </div>
-        </div>
-
-        <div class="card-header-filters" style="width:100%;">
-            <form method="GET" class="card-header-form" style="display:flex; gap:0.5rem; flex-wrap:wrap; width:100%; align-items:center;">
-                <input type="hidden" name="view_mode" value="<?= htmlspecialchars($viewMode) ?>">
-                
-                <div style="flex:1; min-width:200px; position:relative;">
-                    <i data-lucide="search" style="position:absolute; left:10px; top:50%; transform:translateY(-50%); width:14px; height:14px; color:var(--text-muted);"></i>
-                    <input type="text" name="search" value="<?= htmlspecialchars($search) ?>" 
-                           class="form-control" placeholder="Search plate, model, or ref..." style="padding-left:32px; width:100%;">
-                </div>
-                
-                <select name="type" class="form-control" style="width:180px; font-weight:600;">
-                    <option value="">All Types</option>
-                    <option value="lto_registration" <?= $type === 'lto_registration' ? 'selected' : '' ?>>LTO Registration</option>
-                    <option value="insurance_comprehensive" <?= $type === 'insurance_comprehensive' ? 'selected' : '' ?>>Insurance</option>
-                    <option value="emission_test" <?= $type === 'emission_test' ? 'selected' : '' ?>>Emission Test</option>
-                    <option value="franchise_ltfrb" <?= $type === 'franchise_ltfrb' ? 'selected' : '' ?>>Franchise (LTFRB)</option>
-                    <option value="mayors_permit" <?= $type === 'mayors_permit' ? 'selected' : '' ?>>Mayor's Permit</option>
-                </select>
-
-                <select name="sort" class="form-control" style="width:180px; font-weight:600;">
-                    <option value="urgency" <?= $sort === 'urgency' ? 'selected' : '' ?>>Sort: Urgency</option>
-                    <option value="expiry" <?= $sort === 'expiry' ? 'selected' : '' ?>>Sort: Expiry</option>
-                    <option value="type" <?= $sort === 'type' ? 'selected' : '' ?>>Sort: Type</option>
-                    <option value="vehicle" <?= $sort === 'vehicle' ? 'selected' : '' ?>>Sort: Vehicle</option>
-                </select>
-
-                <div style="display:flex; gap:0.25rem;">
-                    <button type="submit" class="btn btn-primary btn-sm" style="padding:0.5rem 1rem;">Filter</button>
-                    <a href="?" class="btn btn-ghost btn-sm" title="Reset Filters"><i data-lucide="rotate-ccw" style="width:18px;height:18px;"></i></a>
-                </div>
-            </form>
-        </div>
+    <div class="card-header" style="border-bottom:none; padding-bottom:0;">
+        <h2 class="card-title" style="margin:0; font-size:1.125rem; display:flex; align-items:center; gap:0.5rem;">
+            <i data-lucide="alert-triangle" style="width:18px;height:18px;color:var(--warning);"></i>
+            Compliance Monitoring
+        </h2>
     </div>
+
+    <div style="padding:.875rem 1.25rem; border-bottom:1px solid var(--border-color);">
+        <form method="GET" id="filterForm" style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;width:100%;">
+            
+            <!-- Search -->
+            <div style="position:relative;flex:1;min-width:200px;">
+                <i data-lucide="search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--text-muted);pointer-events:none;"></i>
+                <input type="text" name="search" id="searchInput" class="form-control" style="padding-left:34px;width:100%;" placeholder="Search plate, model, or ref..." value="<?= htmlspecialchars($_GET['search'] ?? '') ?>">
+            </div>
+
+            <select name="type" class="form-control" style="width:auto;flex-shrink:0;" onchange="this.form.submit()">
+                <option value="">All Types</option>
+                <option value="lto_registration" <?= (isset($_GET['type']) && $_GET['type'] === 'lto_registration') ? 'selected' : '' ?>>LTO Registration</option>
+                <option value="insurance_comprehensive" <?= (isset($_GET['type']) && $_GET['type'] === 'insurance_comprehensive') ? 'selected' : '' ?>>Insurance</option>
+                <option value="emission_test" <?= (isset($_GET['type']) && $_GET['type'] === 'emission_test') ? 'selected' : '' ?>>Emission Test</option>
+                <option value="franchise_ltfrb" <?= (isset($_GET['type']) && $_GET['type'] === 'franchise_ltfrb') ? 'selected' : '' ?>>Franchise (LTFRB)</option>
+                <option value="mayors_permit" <?= (isset($_GET['type']) && $_GET['type'] === 'mayors_permit') ? 'selected' : '' ?>>Mayor's Permit</option>
+            </select>
+
+            <?php if (!empty($_GET['status'])): ?>
+                <input type="hidden" name="status" value="<?= htmlspecialchars($_GET['status']) ?>">
+            <?php endif; ?>
+            <?php if (!empty($_GET['sort_by'])): ?>
+                <input type="hidden" name="sort_by" value="<?= htmlspecialchars($_GET['sort_by']) ?>">
+                <input type="hidden" name="sort_order" value="<?= htmlspecialchars($_GET['sort_order']) ?>">
+            <?php endif; ?>
+
+            <div style="display:flex;gap:.5rem;flex-shrink:0;">
+                <button type="submit" class="btn btn-primary btn-sm" id="applyFilterBtn">
+                    <i data-lucide="search" style="width:13px;height:13px;"></i> Search
+                </button>
+                <?php if (!empty($_GET['search']) || !empty($_GET['status']) || !empty($_GET['type'])): ?>
+                    <a href="index.php" class="btn btn-ghost btn-sm" title="Clear Filters"><i data-lucide="rotate-ccw" style="width:14px;height:14px;"></i></a>
+                <?php endif; ?>
+            </div>
+
+            <!-- Result count -->
+            <span style="margin-left:auto;font-size:.8125rem;color:var(--text-muted);white-space:nowrap;flex-shrink:0;">
+                <?= number_format($result['total'] ?? 0) ?> record<?= ($result['total'] ?? 0) !== 1 ? 's' : '' ?>
+            </span>
+        </form>
+    </div>
+
     <div class="table-container" style="border:none;">
         <table>
             <thead>
                 <tr>
-                    <th>Vehicle Target</th>
-                    <th>Instrument Type</th>
-                    <th>Reference #</th>
-                    <th>Expiry Horizon</th>
-                    <th>State</th>
+                    <th>
+                        <a href="<?= buildSortUrl('v.plate_number', $currentSortBy, $currentSortOrder) ?>" class="sortable-header">Vehicle Target <?= getSortIcon('v.plate_number', $currentSortBy, $currentSortOrder) ?></a>
+                    </th>
+                    <th>
+                        <a href="<?= buildSortUrl('c.compliance_type', $currentSortBy, $currentSortOrder) ?>" class="sortable-header">Document Type <?= getSortIcon('c.compliance_type', $currentSortBy, $currentSortOrder) ?></a>
+                    </th>
+                    <th>
+                        <a href="<?= buildSortUrl('c.document_number', $currentSortBy, $currentSortOrder) ?>" class="sortable-header">Reference # <?= getSortIcon('c.document_number', $currentSortBy, $currentSortOrder) ?></a>
+                    </th>
+                    <th>
+                        <a href="<?= buildSortUrl('c.expiry_date', $currentSortBy, $currentSortOrder) ?>" class="sortable-header">Expiry Horizon <?= getSortIcon('c.expiry_date', $currentSortBy, $currentSortOrder) ?></a>
+                    </th>
+                    <th>
+                        <a href="<?= buildSortUrl('c.status', $currentSortBy, $currentSortOrder) ?>" class="sortable-header">State <?= getSortIcon('c.status', $currentSortBy, $currentSortOrder) ?></a>
+                    </th>
                     <th style="flex: 0 0 100px; justify-content: flex-end; text-align: right;">Actions</th>
                 </tr>
             </thead>
             <tbody>
                 <?php if (!empty($items)):
                     foreach ($items as $item):
-                        $diff = ceil((strtotime($item['expiry_date']) - time()) / (60 * 60 * 24));
-                        $badgeCls = $diff < 0 ? 'badge-danger' : 'badge-warning';
+                        $hasExpiry  = !empty($item['expiry_date']) && $item['expiry_date'] !== '0000-00-00';
+                        $diff       = $hasExpiry ? (int) ceil((strtotime($item['expiry_date']) - time()) / (60 * 60 * 24)) : null;
+                        $isBreached = $hasExpiry && $diff < 0;
+                        $isCritical = $hasExpiry && !$isBreached && $diff <= 30;
+                        $isPending  = !$hasExpiry;
+                        $badgeCls   = $isPending ? 'badge-secondary' : ($isBreached ? 'badge-danger' : ($isCritical ? 'badge-warning' : 'badge-success'));
+                        $badgeText  = $isPending ? 'PENDING' : ($isBreached ? 'BREACHED' : ($isCritical ? 'CRITICAL' : 'VALID'));
                         ?>
-                        <tr>
+                        <tr <?= $isPending ? '' : ($isBreached ? 'style="background:var(--danger-light);"' : ($isCritical ? 'style="background:var(--warning-light);"' : '')) ?>>
                             <td>
-                                <div style="font-weight:600;"><?= htmlspecialchars($item['brand'] . ' ' . $item['model']) ?>
-                                </div>
-                                <div style="font-size:0.75rem;color:var(--text-muted);">
+                                <a href="../asset-tracking/vehicle-details.php?id=<?= $item['vehicle_id'] ?>" style="font-weight:600;display:flex;align-items:center;gap:4px;color:inherit;">
+                                    <i data-lucide="link" style="width:12px;height:12px;opacity:0.6;"></i> <?= htmlspecialchars($item['brand'] . ' ' . $item['model']) ?>
+                                </a>
+                                <div style="font-size:0.75rem;color:var(--text-muted);font-family:monospace;margin-left:16px;">
                                     <?= htmlspecialchars($item['plate_number']) ?>
                                 </div>
                             </td>
                             <td>
-                                <span
-                                    class="badge badge-secondary"><?= strtoupper(str_replace('_', ' ', $item['compliance_type'])) ?></span>
+                                <span class="badge badge-secondary"><?= strtoupper(str_replace('_', ' ', $item['compliance_type'])) ?></span>
                             </td>
-                            <td style="font-family:monospace;"><?= htmlspecialchars($item['document_number'] ?? 'N/A') ?></td>
-                            <td style="font-weight:600; color:<?= $diff < 0 ? 'var(--danger)' : 'var(--text-main)' ?>;">
-                                <?= date('M d, Y', strtotime($item['expiry_date'])) ?>
+                            <td style="font-family:monospace;font-weight:600;"><?= htmlspecialchars($item['document_number'] ?? 'N/A') ?></td>
+                            <td style="font-weight:600; color:<?= $isPending ? 'var(--text-muted)' : ($isBreached ? 'var(--danger)' : 'var(--text-main)') ?>;">
+                                <?= $hasExpiry ? date('M d, Y', strtotime($item['expiry_date'])) : '<em style="opacity:.6;font-weight:400">No expiry set</em>' ?>
                                 <div style="font-size:10px;">
-                                    <?= $diff < 0 ? abs($diff) . ' days lapsed' : $diff . ' days left' ?>
+                                    <?= $isPending ? 'Awaiting instrument upload' : ($isBreached ? abs($diff) . ' days lapsed' : $diff . ' days left') ?>
                                 </div>
                             </td>
                             <td>
-                                <span class="badge <?= $badgeCls ?>"><?= $diff < 0 ? 'BREACHED' : 'PENDING' ?></span>
+                                <span class="badge <?= $badgeCls ?>"><?= $badgeText ?></span>
                             </td>
                             <td>
                                 <div class="table-actions" style="justify-content: flex-end;">
-                                    <a href="instrument-view.php?id=<?= $item['record_id'] ?>"
-                                        class="btn btn-ghost btn-sm">Inspect</a>
+                                    <a href="instrument-view.php?id=<?= $item['record_id'] ?>" class="btn btn-ghost btn-sm">Inspect</a>
                                     <?php if ($authUser->hasPermission('compliance.create')): ?>
                                         <a href="renew-upload.php?vehicle_id=<?= $item['vehicle_id'] ?>&type=<?= urlencode($item['compliance_type']) ?>"
-                                            class="btn btn-<?= $diff < 0 ? 'danger' : 'warning' ?> btn-sm">
+                                            class="btn btn-<?= $isBreached ? 'danger' : 'warning' ?> btn-sm">
                                             Renew
                                         </a>
                                     <?php endif; ?>
@@ -272,23 +303,77 @@ try {
                         </tr>
                     <?php endforeach; else: ?>
                     <tr>
-                        <td colspan="6" style="text-align:center;padding:3rem;color:var(--text-muted);">
-                            <div style="display:flex;flex-direction:column;align-items:center;gap:0.5rem;">
-                                <i data-lucide="shield-check" style="width:48px;height:48px;opacity:0.5;"></i>
-                                <span style="font-weight:600;">No critical exposures detected.</span>
-                                <span>All compliance instruments are valid.</span>
+                        <td colspan="6">
+                            <div class="empty-state">
+                                <i data-lucide="shield-check" class="empty-state-icon"></i>
+                                <h3>No Critical Exposures</h3>
+                                <p style="margin-bottom:1rem;">Your instruments are perfectly optimized. No compliance tasks match your criteria.</p>
+                                <a href="index.php" class="btn btn-secondary">Refresh Dashboard</a>
                             </div>
                         </td>
                     </tr>
                 <?php endif; ?>
             </tbody>
         </table>
+    </div>
+
+    <?php if ($totalPages > 1): ?>
+        <div style="padding:1rem 1.5rem;border-top:1px solid var(--border-color);display:flex;gap:.5rem;justify-content:center;flex-wrap:wrap;">
+            <?php for ($p = 1; $p <= $totalPages; $p++): ?>
+                <a href="?page=<?= $p ?>&<?= http_build_query(array_merge($_GET, ['page' => null])) ?>"
+                    class="btn btn-sm <?= $p === $page ? 'btn-primary' : 'btn-secondary' ?>">
+                    <?= $p ?>
+                </a>
+            <?php endfor; ?>
+        </div>
+    <?php endif; ?>
+</div>
+
+<?php if ($successMsg): ?>
+    <div id="compliance-toast"
+        style="position:fixed;top:1.5rem;right:1.5rem;z-index:9999;display:flex;align-items:center;gap:0.75rem;background:var(--success,#22c55e);color:#fff;padding:0.875rem 1.25rem;border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.18);font-size:0.9rem;font-weight:600;min-width:280px;max-width:380px;animation:toastSlideIn 0.35s cubic-bezier(.4,0,.2,1);">
+        <i data-lucide="check-circle" style="width:20px;height:20px;flex-shrink:0;"></i>
+        <span style="flex:1;"><?= htmlspecialchars($successMsg) ?></span>
+        <button onclick="document.getElementById('compliance-toast').remove()"
+            style="background:none;border:none;cursor:pointer;color:#fff;padding:0;margin:0;display:flex;align-items:center;opacity:0.8;"
+            aria-label="Dismiss">
+            <i data-lucide="x" style="width:16px;height:16px;"></i>
+        </button>
+    </div>
+    <style>
+        @keyframes toastSlideIn {
+            from {
+                opacity: 0;
+                transform: translateX(60px) scale(0.96);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0) scale(1);
+            }
+        }
+    </style>
+    <script>
+        setTimeout(function () {
+            var t = document.getElementById('compliance-toast');
+            if (t) {
+                t.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
+                t.style.opacity = '0';
+                t.style.transform = 'translateX(60px)';
+                setTimeout(function () { if (t) t.remove(); }, 400);
+            }
+        }, 3500);
+    </script>
+<?php endif; ?>
+
 <div id="compliance-history-panel" 
      style="position:fixed;top:0;right:0;width:560px;max-width:100vw;height:100vh;background:var(--bg-surface,#fff);box-shadow:-4px 0 24px rgba(0,0,0,.15);z-index:10000;transform:translateX(100%);transition:transform .3s cubic-bezier(.4,.0,.2,1);display:flex;flex-direction:column;">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:1.25rem 1.5rem;border-bottom:1px solid var(--border-color);">
         <h2 style="margin:0;font-size:1.1rem;display:flex;align-items:center;gap:.5rem;font-weight:800;">
             <i data-lucide="history" style="width:20px;height:20px;color:var(--primary);"></i>
             Compliance Event Log
+            <?php if(!empty($_GET['search'])): ?>
+                <span class="badge badge-secondary" style="font-size:0.7rem; margin-left:10px;">Filtered: <?= htmlspecialchars($_GET['search']) ?></span>
+            <?php endif; ?>
         </h2>
         <button onclick="document.getElementById('compliance-history-panel').classList.remove('open')" 
                 style="background:none;border:none;cursor:pointer;padding:4px;color:var(--text-muted);display:flex;align-items:center;justify-content:center;transition:color 0.2s;"
@@ -300,7 +385,7 @@ try {
         <?php if (empty($history)): ?>
             <div style="text-align:center;padding:3rem;color:var(--text-muted);">
                 <i data-lucide="info" style="width:32px;height:32px;margin-bottom:1rem;opacity:0.5;"></i>
-                <p>No recent compliance event logs recorded.</p>
+                <p>No recent compliance event logs matching your query.</p>
             </div>
         <?php else: ?>
             <?php foreach ($history as $h): 
@@ -336,7 +421,12 @@ try {
                             <i data-lucide="clock" style="width:12px;height:12px;"></i>
                             Event: <?= date('M d, Y', strtotime($h['created_at'])) ?>
                             <span style="margin:0 4px;opacity:0.3;">|</span>
-                            Expiry: <?= date('M d, Y', strtotime($h['expiry_date'])) ?>
+                            Expiry: <?php
+                                $hExpD = $h['expiry_date'] ?? '';
+                                echo (!empty($hExpD) && $hExpD !== '0000-00-00')
+                                    ? date('M d, Y', strtotime($hExpD))
+                                    : '<em>Pending</em>';
+                            ?>
                         </div>
                     </div>
                     <div style="display:flex;flex-direction:column;gap:.5rem;min-width:80px;text-align:right;">

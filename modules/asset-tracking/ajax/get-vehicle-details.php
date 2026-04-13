@@ -10,11 +10,13 @@ require_once '../../../includes/auth-check.php';
 
 header('Content-Type: application/json');
 
-$vehicleId = (int) ($_GET['vehicle_id'] ?? 0);
-if (!$vehicleId) {
+$vehicleId = trim($_GET['vehicle_id'] ?? '');
+if (empty($vehicleId)) {
     echo json_encode(['success' => false, 'message' => 'Vehicle ID required']);
     exit;
 }
+// Sanitize: allow uppercase letters, digits and dashes only (GCR-XX-0000 format)
+$vehicleId = preg_replace('/[^A-Z0-9\-]/', '', strtoupper($vehicleId));
 
 $db = Database::getInstance();
 

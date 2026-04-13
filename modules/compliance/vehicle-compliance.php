@@ -26,6 +26,14 @@ $records = $db->fetchAll(
 );
 
 $today = date('Y-m-d');
+
+// Helper: safely format a date string; returns $fallback on NULL / '0000-00-00'
+function phpFmtDate(?string $d, string $fmt = 'M d, Y', string $fallback = '—'): string {
+    if (empty($d) || $d === '0000-00-00' || $d === '0000-00-00 00:00:00') return $fallback;
+    $ts = strtotime($d);
+    return $ts !== false ? date($fmt, $ts) : $fallback;
+}
+
 $pageTitle = 'Compliance — ' . $vehicle['plate_number'];
 require_once '../../includes/header.php';
 
@@ -51,15 +59,15 @@ $complianceLabels = [
 $totalRecords = count($latestByType);
 $breached = 0;
 $expiring = 0;
-$valid = 0;
+$valid    = 0;
+$pending  = 0;
 foreach ($latestByType as $r) {
-    $d = ceil((strtotime($r['expiry_date']) - time()) / 86400);
-    if ($d < 0)
-        $breached++;
-    elseif ($d <= 30)
-        $expiring++;
-    else
-        $valid++;
+    $hasExp = !empty($r['expiry_date']) && $r['expiry_date'] !== '0000-00-00';
+    if (!$hasExp) { $pending++; continue; }
+    $d = (int) ceil((strtotime($r['expiry_date']) - time()) / 86400);
+    if ($d < 0)       $breached++;
+    elseif ($d <= 30) $expiring++;
+    else              $valid++;
 }
 ?>
 
@@ -115,6 +123,12 @@ foreach ($latestByType as $r) {
                             <i data-lucide="shield-check" style="width:13px;height:13px;"></i> <?= $valid ?> VALID
                         </div>
                     <?php endif; ?>
+                    <?php if ($pending > 0): ?>
+                        <div
+                            style="background:rgba(148,163,184,0.2); border:1px solid rgba(148,163,184,0.4); border-radius:99px; padding:5px 14px; font-size:0.75rem; font-weight:800; color:#94a3b8; display:flex; align-items:center; gap:6px;">
+                            <i data-lucide="clock" style="width:13px;height:13px;"></i> <?= $pending ?> PENDING
+                        </div>
+                    <?php endif; ?>
                     <?php if ($authUser->hasPermission('compliance.create')): ?>
                         <a href="renew-upload.php?vehicle_id=<?= urlencode($vehicleId) ?>" class="btn btn-primary btn-sm"
                             style="font-size:0.8125rem; font-weight:700; display:flex; align-items:center; gap:6px;">
@@ -147,14 +161,16 @@ foreach ($latestByType as $r) {
             Current Status by Type</h2>
         <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:1rem; margin-bottom:2rem;">
             <?php foreach ($latestByType as $type => $r):
-                $daysLeft = ceil((strtotime($r['expiry_date']) - time()) / 86400);
-                $isExpired = $daysLeft < 0;
-                $isWarning = !$isExpired && $daysLeft <= 30;
+                $hasExp     = !empty($r['expiry_date']) && $r['expiry_date'] !== '0000-00-00';
+                $daysLeft   = $hasExp ? (int) ceil((strtotime($r['expiry_date']) - time()) / 86400) : null;
+                $isExpired  = $hasExp && $daysLeft < 0;
+                $isWarning  = $hasExp && !$isExpired && $daysLeft <= 30;
+                $isPending  = !$hasExp;
 
-                $borderColor = $isExpired ? 'var(--danger)' : ($isWarning ? 'var(--warning)' : 'var(--success)');
-                $bgColor = $isExpired ? 'var(--danger-50,#fef2f2)' : ($isWarning ? 'var(--warning-50,#fffbeb)' : 'var(--bg-surface)');
-                $badgeColor = $isExpired ? 'danger' : ($isWarning ? 'warning' : 'success');
-                $statusLabel = $isExpired ? 'BREACHED' : ($isWarning ? 'EXPIRING' : 'VALID');
+                $borderColor = $isPending ? 'var(--border-color)'  : ($isExpired ? 'var(--danger)'  : ($isWarning ? 'var(--warning)'  : 'var(--success)'));
+                $bgColor     = $isPending ? 'var(--bg-surface)'    : ($isExpired ? 'var(--danger-50,#fef2f2)' : ($isWarning ? 'var(--warning-50,#fffbeb)' : 'var(--bg-surface)'));
+                $badgeColor  = $isPending ? 'secondary'            : ($isExpired ? 'danger'          : ($isWarning ? 'warning'          : 'success'));
+                $statusLabel = $isPending ? 'PENDING'              : ($isExpired ? 'BREACHED'        : ($isWarning ? 'EXPIRING'        : 'VALID'));
 
                 $meta = $complianceLabels[$type] ?? ['label' => strtoupper(str_replace('_', ' ', $type)), 'icon' => 'file'];
                 ?>
@@ -185,17 +201,19 @@ foreach ($latestByType as $r) {
                         <div>
                             <div
                                 style="font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted); margin-bottom:2px;">
-                                Expires</div>
+                                <?= $isPending ? 'Status' : 'Expires' ?></div>
                             <div style="font-size:0.9375rem; font-weight:800; color:<?= $borderColor ?>;">
-                                <?= date('M d, Y', strtotime($r['expiry_date'])) ?>
+                                <?= $isPending ? '<em style="font-weight:400;font-size:.875rem">Awaiting document upload</em>' : phpFmtDate($r['expiry_date']) ?>
                             </div>
                         </div>
+                        <?php if (!$isPending): ?>
                         <div style="text-align:right;">
                             <div style="font-size:1.5rem; font-weight:900; color:<?= $borderColor ?>; line-height:1;">
                                 <?= abs($daysLeft) ?></div>
                             <div style="font-size:0.65rem; font-weight:700; text-transform:uppercase; color:var(--text-muted);">
                                 <?= $isExpired ? 'days past' : 'days left' ?></div>
                         </div>
+                        <?php endif; ?>
                     </div>
                     <?php if ($r['renewal_cost']): ?>
                         <div
@@ -242,11 +260,13 @@ foreach ($latestByType as $r) {
                     </thead>
                     <tbody>
                         <?php foreach ($records as $r):
-                            $daysLeft = ceil((strtotime($r['expiry_date']) - time()) / 86400);
-                            $isExpired = $daysLeft < 0;
-                            $isWarning = !$isExpired && $daysLeft <= 30;
-                            $badgeClass = $isExpired ? 'badge-danger' : ($isWarning ? 'badge-warning' : 'badge-success');
-                            $statusLabel = $isExpired ? 'BREACHED' : ($isWarning ? 'EXPIRING' : 'VALID');
+                            $hasExp     = !empty($r['expiry_date']) && $r['expiry_date'] !== '0000-00-00';
+                            $daysLeft   = $hasExp ? (int) ceil((strtotime($r['expiry_date']) - time()) / 86400) : null;
+                            $isExpired  = $hasExp && $daysLeft < 0;
+                            $isWarning  = $hasExp && !$isExpired && $daysLeft <= 30;
+                            $isPending  = !$hasExp;
+                            $badgeClass  = $isPending ? 'badge-secondary' : ($isExpired ? 'badge-danger' : ($isWarning ? 'badge-warning' : 'badge-success'));
+                            $statusLabel = $isPending ? 'PENDING' : ($isExpired ? 'BREACHED' : ($isWarning ? 'EXPIRING' : 'VALID'));
                             $meta = $complianceLabels[$r['compliance_type']] ?? ['label' => ucwords(str_replace('_', ' ', $r['compliance_type'])), 'icon' => 'file'];
                             $isLatest = isset($latestByType[$r['compliance_type']]) && $latestByType[$r['compliance_type']]['record_id'] === $r['record_id'];
                             ?>
@@ -274,10 +294,10 @@ foreach ($latestByType as $r) {
                                     <?= $r['issue_date'] ? date('M d, Y', strtotime($r['issue_date'])) : '—' ?>
                                 </td>
                                 <td
-                                    style="padding:10px 14px; font-size:0.8rem; font-weight:700; color:<?= $isExpired ? 'var(--danger)' : ($isWarning ? 'var(--warning)' : 'var(--text-main)') ?>">
-                                    <?= date('M d, Y', strtotime($r['expiry_date'])) ?>
+                                    style="padding:10px 14px; font-size:0.8rem; font-weight:700; color:<?= $isPending ? 'var(--text-muted)' : ($isExpired ? 'var(--danger)' : ($isWarning ? 'var(--warning)' : 'var(--text-main)')) ?>">
+                                    <?= $isPending ? '<em style="font-weight:400">No expiry set</em>' : phpFmtDate($r['expiry_date']) ?>
                                     <div style="font-size:0.7rem; color:var(--text-muted); font-weight:500;">
-                                        <?= $isExpired ? abs($daysLeft) . ' days lapsed' : $daysLeft . ' days left' ?>
+                                        <?= $isPending ? 'Awaiting upload' : ($isExpired ? abs($daysLeft) . ' days lapsed' : $daysLeft . ' days left') ?>
                                     </div>
                                 </td>
                                 <td style="padding:10px 14px; font-size:0.8rem; font-weight:700; color:var(--text-main);">
@@ -305,9 +325,9 @@ foreach ($latestByType as $r) {
                                         <?php endif; ?>
                                         <?php if ($authUser->hasPermission('compliance.create') && $isLatest): ?>
                                             <a href="renew-upload.php?vehicle_id=<?= urlencode($vehicleId) ?>&type=<?= urlencode($r['compliance_type']) ?>"
-                                                class="btn btn-<?= $isExpired ? 'danger' : 'warning' ?> btn-sm" title="Renew"
+                                                class="btn btn-<?= $isPending ? 'primary' : ($isExpired ? 'danger' : 'warning') ?> btn-sm" title="<?= $isPending ? 'Archive Instrument' : 'Renew' ?>"
                                                 style="font-size:0.7rem;">
-                                                Renew
+                                                <?= $isPending ? 'Archive' : 'Renew' ?>
                                             </a>
                                         <?php endif; ?>
                                     </div>

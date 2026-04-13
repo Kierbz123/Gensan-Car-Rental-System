@@ -3,10 +3,16 @@ require_once '../../../includes/session-manager.php';
 
 header('Content-Type: application/json');
 
-// Only logged in users can access this
+// Only logged-in users with vehicle view permission can access this
 if (!$authUser) {
     http_response_code(401);
     echo json_encode(['error' => 'Unauthorized']);
+    exit;
+}
+
+if (!$authUser->hasPermission('vehicles.view')) {
+    http_response_code(403);
+    echo json_encode(['error' => 'Forbidden']);
     exit;
 }
 
@@ -29,12 +35,7 @@ if (!in_array($field, $allowedFields)) {
 }
 
 $params = [$value];
-$sql = "SELECT COUNT(*) as count FROM vehicles WHERE {$field} = ?";
-
-// For plate_number, we also need to account for deleted_at
-if ($field === 'plate_number') {
-    $sql .= " AND deleted_at IS NULL";
-}
+$sql = "SELECT COUNT(*) as count FROM vehicles WHERE {$field} = ? AND deleted_at IS NULL";
 
 if (!empty($exclude_id)) {
     $sql .= " AND vehicle_id != ?";

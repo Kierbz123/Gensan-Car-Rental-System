@@ -72,7 +72,22 @@ require_once '../../includes/header.php';
             </div>
             <?php endif; ?>
 
-            <form action="" method="POST" enctype="multipart/form-data">
+            <!-- 3D Photo Widget Styles (moved out of <form> — invalid HTML5 inside form) -->
+            <style>
+                #vehicle3dStage{perspective:900px;width:100%;height:180px;display:flex;align-items:center;justify-content:center;margin-bottom:1rem;}
+                #vehicle3dCard{width:220px;height:138px;border-radius:14px;background:linear-gradient(135deg,#1e293b,#334155);box-shadow:0 20px 60px rgba(0,0,0,.35),0 4px 12px rgba(0,0,0,.2);transform-style:preserve-3d;animation:spin3d 8s linear infinite;overflow:hidden;position:relative;}
+                #vehicle3dCard img{width:100%;height:100%;object-fit:cover;border-radius:14px;}
+                #vehicle3dCard .car-placeholder{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.5rem;}
+                #vehicle3dCard .car-placeholder svg{width:64px;height:64px;color:#94a3b8;}
+                #vehicle3dCard .car-placeholder span{font-size:.7rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.1em;font-weight:700;}
+                @keyframes spin3d{0%{transform:rotateY(-25deg) rotateX(5deg)}50%{transform:rotateY(25deg) rotateX(-5deg)}100%{transform:rotateY(-25deg) rotateX(5deg)}}
+                #vehiclePhotoDropzone{border:2px dashed var(--border-color);border-radius:var(--radius-md);padding:1.25rem;text-align:center;cursor:pointer;transition:all .25s;background:var(--bg-muted);}
+                #vehiclePhotoDropzone:hover,#vehiclePhotoDropzone.drag-over{border-color:var(--primary);background:rgba(99,102,241,.06);box-shadow:0 0 0 4px rgba(99,102,241,.12);}
+                #vehiclePhotoDropzone .dz-label{font-size:.8rem;color:var(--text-secondary);font-weight:600;}
+                #vehiclePhotoDropzone .dz-hint{font-size:.7rem;color:var(--text-muted);margin-top:.25rem;}
+            </style>
+
+            <form action="" method="POST" enctype="multipart/form-data" class="needs-validation" novalidate>
                 <?php echo csrfField(); ?>
                 
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 2rem;">
@@ -288,17 +303,7 @@ require_once '../../includes/header.php';
                             </div>
                             <div class="card-body" style="padding-bottom:1rem;">
                                 <style>
-                                    #vehicle3dStage{perspective:900px;width:100%;height:180px;display:flex;align-items:center;justify-content:center;margin-bottom:1rem;}
-                                    #vehicle3dCard{width:220px;height:138px;border-radius:14px;background:linear-gradient(135deg,#1e293b,#334155);box-shadow:0 20px 60px rgba(0,0,0,.35),0 4px 12px rgba(0,0,0,.2);transform-style:preserve-3d;animation:spin3d 8s linear infinite;overflow:hidden;position:relative;}
-                                    #vehicle3dCard img{width:100%;height:100%;object-fit:cover;border-radius:14px;}
-                                    #vehicle3dCard .car-placeholder{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.5rem;}
-                                    #vehicle3dCard .car-placeholder svg{width:64px;height:64px;color:#94a3b8;}
-                                    #vehicle3dCard .car-placeholder span{font-size:.7rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.1em;font-weight:700;}
-                                    @keyframes spin3d{0%{transform:rotateY(-25deg) rotateX(5deg)}50%{transform:rotateY(25deg) rotateX(-5deg)}100%{transform:rotateY(-25deg) rotateX(5deg)}}
-                                    #vehiclePhotoDropzone{border:2px dashed var(--border-color);border-radius:var(--radius-md);padding:1.25rem;text-align:center;cursor:pointer;transition:all .25s;background:var(--bg-muted);}
-                                    #vehiclePhotoDropzone:hover,#vehiclePhotoDropzone.drag-over{border-color:var(--primary);background:rgba(99,102,241,.06);box-shadow:0 0 0 4px rgba(99,102,241,.12);}
-                                    #vehiclePhotoDropzone .dz-label{font-size:.8rem;color:var(--text-secondary);font-weight:600;}
-                                    #vehiclePhotoDropzone .dz-hint{font-size:.7rem;color:var(--text-muted);margin-top:.25rem;}
+                                    /* Placeholder for any additional photo widget overrides */
                                 </style>
 
                                 <!-- 3D rotating stage -->
@@ -458,7 +463,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     .then(res => res.json())
                     .then(data => {
                         if (data.exists) {
-                            const fieldName = fieldId.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+                            const fieldName = fieldId.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                             
                             const msg = document.createElement('div');
                             msg.className = 'dup-error-msg text-danger mt-1';

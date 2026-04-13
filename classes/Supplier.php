@@ -19,8 +19,11 @@ class Supplier
     // -------------------------------------------------------
     public function create(array $data, int $createdBy): int
     {
-        $maxId = (int) $this->db->fetchColumn("SELECT COALESCE(MAX(supplier_id), 0) FROM suppliers");
-        $code = 'SUP-' . str_pad($maxId + 1, 4, '0', STR_PAD_LEFT);
+        $count = (int) $this->db->fetchColumn("SELECT COUNT(*) FROM suppliers");
+        $code  = 'SUP-' . str_pad($count + 1, 4, '0', STR_PAD_LEFT);
+        while ($this->db->fetchColumn("SELECT COUNT(*) FROM suppliers WHERE supplier_code = ?", [$code]) > 0) {
+            $code = 'SUP-' . str_pad(++$count + 1, 4, '0', STR_PAD_LEFT);
+        }
 
         $id = $this->db->insert(
             "INSERT INTO suppliers
@@ -194,14 +197,32 @@ class Supplier
             $params
         );
 
+        $sortBy = 's.company_name';
+        $sortOrder = 'ASC';
+
+        if (!empty($filters['sort_by'])) {
+            $allowedSorts = ['s.supplier_code', 's.company_name', 's.category', 's.is_active'];
+            $sortByParam = $filters['sort_by'];
+            if (strpos($sortByParam, '.') === false && in_array('s.' . $sortByParam, $allowedSorts)) {
+                $sortByParam = 's.' . $sortByParam;
+            }
+            if (in_array($sortByParam, $allowedSorts)) {
+                $sortBy = $sortByParam;
+            }
+        }
+
+        if (!empty($filters['sort_order']) && in_array(strtoupper($filters['sort_order']), ['ASC', 'DESC'])) {
+            $sortOrder = strtoupper($filters['sort_order']);
+        }
+
         $offset = ($page - 1) * $perPage;
         $rows = $this->db->fetchAll(
             "SELECT s.*
              FROM suppliers s
              WHERE {$whereClause}
-             ORDER BY s.company_name
-             LIMIT " . (int) $perPage . " OFFSET " . (int) $offset,
-            $params
+             ORDER BY {$sortBy} {$sortOrder}
+             LIMIT ? OFFSET ?",
+            array_merge($params, [(int) $perPage, (int) $offset])
         );
 
         return [
@@ -242,5 +263,17 @@ class Supplier
              LIMIT ?",
             [$supplierId, $limit]
         );
+    }
+
+    // -------------------------------------------------------
+    // Supplier Statistics
+    // -------------------------------------------------------
+    public function getStats(): array
+    {
+        return [
+            'total' => $this->db->fetchColumn("SELECT COUNT(*) FROM suppliers WHERE deleted_at IS NULL") ?? 0,
+            'active' => $this->db->fetchColumn("SELECT COUNT(*) FROM suppliers WHERE is_active = 1 AND deleted_at IS NULL") ?? 0,
+            'inactive' => $this->db->fetchColumn("SELECT COUNT(*) FROM suppliers WHERE is_active = 0 AND deleted_at IS NULL") ?? 0
+        ];
     }
 }

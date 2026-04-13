@@ -24,30 +24,43 @@ if (!$document) {
 // TODO: Further role-base checking
 // Example: if ($document['entity_type'] == 'vehicle' && !$authUser->hasPermission('vehicles.view')) { ... }
 
-$baseDir = rtrim(defined('BASE_PATH') ? BASE_PATH : __DIR__ . '/../../', '/');
+$baseDir  = rtrim(defined('BASE_PATH') ? BASE_PATH : __DIR__ . '/../../', '/');
 $filePath = $baseDir . '/' . ltrim($document['file_path'], '/');
 
-if (!file_exists($filePath)) {
+// Guard against directory traversal: resolved path must stay inside STORAGE_DIR
+$allowedBase = realpath($baseDir . '/' . DocumentManager::STORAGE_DIR);
+$resolvedFile = realpath($filePath);
+if (!$resolvedFile || !$allowedBase || strpos($resolvedFile, $allowedBase) !== 0) {
+    header("HTTP/1.1 403 Forbidden");
+    exit('Access denied.');
+}
+
+if (!file_exists($resolvedFile)) {
     header("HTTP/1.1 404 Not Found");
     exit('File physically missing from server.');
 }
 
-// Determine content type
-$mimeType = $document['file_type'];
+// Use server-side finfo for MIME — never trust the DB value alone
+$finfo    = finfo_open(FILEINFO_MIME_TYPE);
+$mimeType = finfo_file($finfo, $resolvedFile) ?: 'application/octet-stream';
+finfo_close($finfo);
+
+// Safe download filename: use the stored basename, not the user-supplied title
+$safeFilename = basename($resolvedFile);
 
 header('Content-Description: File Transfer');
 header('Content-Type: ' . $mimeType);
 
 // If download is explicitly requested
 if (isset($_GET['download']) && $_GET['download'] == 1) {
-    header('Content-Disposition: attachment; filename="' . basename($document['title']) . '"');
+    header('Content-Disposition: attachment; filename="' . $safeFilename . '"');
 } else {
-    header('Content-Disposition: inline; filename="' . basename($document['title']) . '"');
+    header('Content-Disposition: inline; filename="' . $safeFilename . '"');
 }
 
 header('Expires: 0');
 header('Cache-Control: must-revalidate');
 header('Pragma: public');
-header('Content-Length: ' . filesize($filePath));
-readfile($filePath);
+header('Content-Length: ' . filesize($resolvedFile));
+readfile($resolvedFile);
 exit;

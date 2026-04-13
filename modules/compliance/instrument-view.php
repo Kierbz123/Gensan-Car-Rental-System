@@ -71,9 +71,19 @@ require_once '../../includes/header.php';
 $base = defined('BASE_URL') ? rtrim(BASE_URL, '/') : '';
 
 // Calculate status and days left
-$diff = ceil((strtotime($record['expiry_date']) - time()) / (60 * 60 * 24));
-$statusText = $diff < 0 ? 'BREACHED' : ($diff <= 30 ? 'EXPIRING SOON' : 'VALID');
-$statusColor = $diff < 0 ? 'danger' : ($diff <= 30 ? 'warning' : 'success');
+$hasExpiry  = !empty($record['expiry_date']) && $record['expiry_date'] !== '0000-00-00';
+$diff       = $hasExpiry ? ceil((strtotime($record['expiry_date']) - time()) / (60 * 60 * 24)) : null;
+$statusText = !$hasExpiry ? 'PENDING'     : ($diff < 0  ? 'BREACHED'      : ($diff <= 30 ? 'EXPIRING SOON' : 'VALID'));
+$statusColor= !$hasExpiry ? 'secondary'   : ($diff < 0  ? 'danger'         : ($diff <= 30 ? 'warning'       : 'success'));
+
+// Helper: safely format a date column, returns $fallback for NULL / zero dates
+function fmtDate(?string $dateStr, string $fmt = 'M d, Y', string $fallback = '—'): string {
+    if (empty($dateStr) || $dateStr === '0000-00-00' || $dateStr === '0000-00-00 00:00:00') {
+        return $fallback;
+    }
+    $ts = strtotime($dateStr);
+    return $ts !== false ? date($fmt, $ts) : $fallback;
+}
 
 // Compliance Labels
 $complianceTypes = [
@@ -223,7 +233,7 @@ $typeLabel = $complianceTypes[$record['compliance_type']] ?? strtoupper(str_repl
                         <div style="display: flex; justify-content: space-between; font-size: 0.875rem;">
                             <span style="color: var(--text-secondary);">Expiry</span>
                             <span style="font-weight: bold; color: <?= $statusColorHex ?>;">
-                                <?= date('M d, Y', strtotime($record['expiry_date'])) ?>
+                                <?= fmtDate($record['expiry_date']) ?>
                             </span>
                         </div>
                     </div>
@@ -292,7 +302,7 @@ $typeLabel = $complianceTypes[$record['compliance_type']] ?? strtoupper(str_repl
                                 style="display: block; font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px;">Validity
                                 Status</label>
                             <p style="font-weight: bold; margin: 0; font-size: 1rem; color: <?= $statusColorHex ?>;">
-                                <?= $diff < 0 ? abs($diff) . ' days lapsed' : $diff . ' days remaining' ?>
+                                <?= $diff === null ? 'No expiry set' : ($diff < 0 ? abs($diff) . ' days lapsed' : $diff . ' days remaining') ?>
                             </p>
                         </div>
                     </div>
@@ -341,7 +351,7 @@ $typeLabel = $complianceTypes[$record['compliance_type']] ?? strtoupper(str_repl
                                 style="font-size: 0.875rem; font-weight: bold; margin: 0 0 4px 0; color: var(--text-muted);">
                                 Renewal Required</h3>
                             <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px;">
-                                <?= date('M d, Y', strtotime($record['expiry_date'])) ?>
+                                <?= fmtDate($record['expiry_date']) ?>
                             </div>
                             <p style="font-size: 0.875rem; color: var(--text-muted); margin: 0;">Asset becomes legally
                                 void if not renewed.</p>
@@ -369,13 +379,14 @@ $typeLabel = $complianceTypes[$record['compliance_type']] ?? strtoupper(str_repl
                             No compliance records found for this vehicle.</p>
                     <?php else:
                         foreach ($allCompliance as $comp):
-                            $cDiff = ceil((strtotime($comp['expiry_date']) - time()) / 86400);
-                            $cExp = $cDiff < 0;
-                            $cWarn = !$cExp && $cDiff <= 30;
-                            $cColor = $cExp ? 'var(--danger)' : ($cWarn ? 'var(--warning)' : 'var(--success)');
-                            $cBg = $cExp ? 'var(--danger-50,#fef2f2)' : ($cWarn ? 'var(--warning-50,#fffbeb)' : 'var(--bg-muted)');
-                            $cBorder = $cExp ? 'var(--danger-200,#fecaca)' : ($cWarn ? 'var(--warning-200,#fde68a)' : 'var(--border-color)');
-                            $cLabel = $cExp ? 'BREACHED' : ($cWarn ? 'EXPIRING' : 'VALID');
+                            $hasExp  = !empty($comp['expiry_date']) && $comp['expiry_date'] !== '0000-00-00';
+                            $cDiff   = $hasExp ? ceil((strtotime($comp['expiry_date']) - time()) / 86400) : null;
+                            $cExp    = $hasExp && $cDiff < 0;
+                            $cWarn   = $hasExp && !$cExp && $cDiff <= 30;
+                            $cColor  = !$hasExp ? 'var(--text-muted)' : ($cExp ? 'var(--danger)' : ($cWarn ? 'var(--warning)' : 'var(--success)'));
+                            $cBg     = !$hasExp ? 'var(--bg-muted)'   : ($cExp ? 'var(--danger-50,#fef2f2)' : ($cWarn ? 'var(--warning-50,#fffbeb)' : 'var(--bg-muted)'));
+                            $cBorder = !$hasExp ? 'var(--border-color)' : ($cExp ? 'var(--danger-200,#fecaca)' : ($cWarn ? 'var(--warning-200,#fde68a)' : 'var(--border-color)'));
+                            $cLabel  = !$hasExp ? 'PENDING' : ($cExp ? 'BREACHED' : ($cWarn ? 'EXPIRING' : 'VALID'));
                             $isActive = ($comp['record_id'] == $recordId);
                             $cTypeLabel = $complianceTypes[$comp['compliance_type']] ?? strtoupper(str_replace('_', ' ', $comp['compliance_type']));
                             ?>
@@ -392,7 +403,7 @@ $typeLabel = $complianceTypes[$record['compliance_type']] ?? strtoupper(str_repl
                                         <?php endif; ?>
                                     </div>
                                     <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">
-                                        Exp: <?= date('M d, Y', strtotime($comp['expiry_date'])) ?>
+                                        Exp: <?= fmtDate($comp['expiry_date'], 'M d, Y', 'Pending') ?>
                                         <?php if ($comp['document_number']): ?>
                                             · #<?= htmlspecialchars($comp['document_number']) ?>
                                         <?php endif; ?>
@@ -451,11 +462,12 @@ $typeLabel = $complianceTypes[$record['compliance_type']] ?? strtoupper(str_repl
                             </thead>
                             <tbody>
                                 <?php foreach ($renewalHistory as $h):
-                                    $hDiff = ceil((strtotime($h['expiry_date']) - time()) / 86400);
-                                    $hExp = $hDiff < 0;
-                                    $hWarn = !$hExp && $hDiff <= 30;
-                                    $hColor = $hExp ? 'var(--danger)' : ($hWarn ? 'var(--warning)' : 'var(--success)');
-                                    $hLabel = $hExp ? 'BREACHED' : ($hWarn ? 'EXPIRING' : 'VALID');
+                                    $hasHExp = !empty($h['expiry_date']) && $h['expiry_date'] !== '0000-00-00';
+                                    $hDiff  = $hasHExp ? ceil((strtotime($h['expiry_date']) - time()) / 86400) : null;
+                                    $hExp   = $hasHExp && $hDiff < 0;
+                                    $hWarn  = $hasHExp && !$hExp && $hDiff <= 30;
+                                    $hColor = !$hasHExp ? 'var(--text-muted)' : ($hExp ? 'var(--danger)' : ($hWarn ? 'var(--warning)' : 'var(--success)'));
+                                    $hLabel = !$hasHExp ? 'PENDING' : ($hExp ? 'BREACHED' : ($hWarn ? 'EXPIRING' : 'VALID'));
                                     $hActive = ($h['record_id'] == $recordId);
                                     ?>
                                     <tr
@@ -480,9 +492,9 @@ $typeLabel = $complianceTypes[$record['compliance_type']] ?? strtoupper(str_repl
                                         </td>
                                         <td
                                             style="padding:10px 14px; font-size:0.8125rem; font-weight:700; color:<?= $hColor ?>;">
-                                            <?= date('M d, Y', strtotime($h['expiry_date'])) ?>
+                                            <?= fmtDate($h['expiry_date']) ?>
                                             <div style="font-size:0.7rem; color:var(--text-muted); font-weight:500;">
-                                                <?= $hExp ? abs($hDiff) . ' days lapsed' : $hDiff . ' days left' ?>
+                                                <?= !$hasHExp ? '—' : ($hExp ? abs($hDiff) . ' days lapsed' : $hDiff . ' days left') ?>
                                             </div>
                                         </td>
                                         <td

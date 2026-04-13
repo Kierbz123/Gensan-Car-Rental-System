@@ -41,6 +41,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'License number is required.';
         elseif (empty($data['license_expiry']))
             $error = 'License expiry date is required.';
+        elseif (!empty($data['email']) && !filter_var($data['email'], FILTER_VALIDATE_EMAIL))
+            $error = 'Please enter a valid email address.';
+        elseif (strtotime($data['license_expiry']) < strtotime('today'))
+            $error = 'License expiry date must not be in the past.';
 
         if (!$error) {
             try {
@@ -81,7 +85,7 @@ require_once '../../includes/header.php';
     </div>
 <?php endif; ?>
 
-<form method="POST" id="driverAddForm" enctype="multipart/form-data" style="max-width:720px;">
+<form method="POST" id="driverAddForm" enctype="multipart/form-data" class="needs-validation" novalidate style="max-width:720px;">
     <?= csrfField() ?>
 
     <!-- Personal Info -->

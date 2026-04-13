@@ -23,6 +23,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (empty(trim($_POST[$f] ?? '')))
                 $errors[] = ucfirst(str_replace('_', ' ', $f)) . ' is required.';
         }
+
+        // Server-side enum whitelist — HTML select is bypassable via curl
+        $allowedCategories = ['vehicle_parts', 'office_supplies', 'tools_equipment', 'safety_gear', 'maintenance_materials', 'other'];
+        if (!empty($_POST['category']) && !in_array($_POST['category'], $allowedCategories, true))
+            $errors[] = 'Invalid category selected.';
+
+        $allowedPriorities = ['low', 'normal', 'high', 'urgent'];
+        if (!empty($_POST['priority']) && !in_array($_POST['priority'], $allowedPriorities, true))
+            $errors[] = 'Invalid priority selected.';
+
+        // Server-side date guard — HTML min= is bypassable via curl
+        if (!empty($_POST['date_needed']) && strtotime($_POST['date_needed']) < strtotime('today'))
+            $errors[] = 'Date needed must not be in the past.';
         // Validate items
         $items = [];
         foreach ($_POST['items'] ?? [] as $i => $item) {
@@ -60,19 +73,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }, $items)
                 ];
 
-                $result = $procurement->create($prData, $_SESSION['user_id']);
+                $result = $procurement->create($prData, $authUser->getId());
                 $prId = $result['pr_id'];
                 $prNumber = $result['pr_number'];
 
                 // Automatically submit for approval
-                $procurement->submitForApproval($prId, $_SESSION['user_id']);
+                $procurement->submitForApproval($prId, $authUser->getId());
 
                 $_SESSION['success_message'] = 'Purchase Request ' . $prNumber . ' submitted successfully.';
                 header('Location: pr-view.php?id=' . $prId);
                 exit;
             } catch (Exception $e) {
                 error_log("PR Creation failed: " . $e->getMessage());
-                $errors[] = 'Failed to submit Purchase Request. Please try again.';
+                $errors[] = $e->getMessage();
             }
         }
     }
@@ -106,7 +119,7 @@ require_once '../../includes/header.php';
         </div>
     <?php endif; ?>
 
-    <form method="POST" id="prForm">
+    <form method="POST" id="prForm" class="needs-validation" novalidate>
         <?= csrfField() ?>
         <div class="max-w-5xl mx-auto">
             <div class="flex flex-col gap-6">

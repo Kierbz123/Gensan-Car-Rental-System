@@ -636,7 +636,6 @@ class QRspec
     /** --------------------------------------------------------------------
      * Put an alignment marker.
      * @param array $frame
-     * @param int $width
      * @param int $ox
      * @param int $oy center coordinate of the pattern
      */
@@ -778,7 +777,6 @@ class QRspec
     /** --------------------------------------------------------------------
      * Put a finder pattern.
      * @param array $frame
-     * @param int $width
      * @param int $ox
      * @param int $oy upper-left coordinate of the pattern
      */
