@@ -31,14 +31,7 @@ $CATEGORY_LABELS = [
 $catLabel  = $CATEGORY_LABELS[$s['category']] ?? $s['category'];
 ?>
 
-<?php if ($successMsg): ?>
-    <div id="toast-sup"
-        style="position:fixed;top:1.5rem;right:1.5rem;z-index:9999;display:flex;align-items:center;gap:.75rem;background:var(--success);color:#fff;padding:.875rem 1.25rem;border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.18);font-size:.9rem;font-weight:600;min-width:280px;max-width:380px;">
-        <i data-lucide="check-circle" style="width:20px;height:20px;flex-shrink:0;"></i>
-        <span><?= htmlspecialchars($successMsg) ?></span>
-    </div>
-    <script>setTimeout(() => { document.getElementById('toast-sup')?.remove(); }, 3500);</script>
-<?php endif; ?>
+<?php if ($successMsg) echo renderToast($successMsg, 'success', 'toast-sup'); ?>
 
 <div class="page-header">
     <div class="page-title">
@@ -49,6 +42,11 @@ $catLabel  = $CATEGORY_LABELS[$s['category']] ?? $s['category'];
         <p><?= htmlspecialchars($s['supplier_code']) ?></p>
     </div>
     <div class="page-actions">
+        <?php if ($authUser->hasPermission('procurement.create')): ?>
+            <a href="../procurement/pr-create.php?supplier_id=<?= $supplierId ?>" class="btn btn-warning" style="background-color: var(--warning-light); color: var(--warning-dark); border-color: var(--warning);">
+                <i data-lucide="shopping-cart" style="width:16px;height:16px;"></i> Create Order
+            </a>
+        <?php endif; ?>
         <?php if ($authUser->hasPermission('suppliers.update')): ?>
             <a href="supplier-edit.php?id=<?= $supplierId ?>" class="btn btn-primary">
                 <i data-lucide="pencil" style="width:16px;height:16px;"></i> Edit
@@ -60,7 +58,7 @@ $catLabel  = $CATEGORY_LABELS[$s['category']] ?? $s['category'];
     </div>
 </div>
 
-<div style="display:grid;grid-template-columns:1fr 2fr;gap:1.5rem;align-items:start;">
+<div class="grid-layout grid-layout-1-2">
 
     <!-- Left Panel: Company Info -->
     <div style="display:flex;flex-direction:column;gap:1.5rem;">
@@ -84,21 +82,30 @@ $catLabel  = $CATEGORY_LABELS[$s['category']] ?? $s['category'];
             </div>
             <div style="border-top:1px solid var(--border-color);padding:1.25rem;">
                 <?php $info = [
-                    ['user',       'Contact',   $s['contact_person'] ?? '—'],
-                    ['briefcase',  'Position',  $s['position'] ?? '—'],
-                    ['phone',      'Phone',     $s['phone_primary'] ?? '—'],
-                    ['phone',      'Phone 2',   $s['phone_secondary'] ?: '—'],
-                    ['mail',       'Email',     $s['email'] ?? '—'],
-                    ['globe',      'Website',   $s['website'] ?? '—'],
-                    ['map-pin',    'Address',   implode(', ', array_filter([$s['address'], $s['city'], $s['province']]))],
+                    ['user',       'Contact',   $s['contact_person'] ?? '—', false],
+                    ['briefcase',  'Position',  $s['position'] ?? '—', false],
+                    ['phone',      'Phone',     $s['phone_primary'] ?? '—', 'tel'],
+                    ['phone',      'Phone 2',   $s['phone_secondary'] ?: '—', 'tel'],
+                    ['mail',       'Email',     $s['email'] ?? '—', 'mailto'],
+                    ['globe',      'Website',   $s['website'] ?? '—', 'http'],
+                    ['map-pin',    'Address',   implode(', ', array_filter([$s['address'], $s['city'], $s['province']])), false],
                 ];
-                foreach ($info as [$icon, $label, $val]): ?>
+                foreach ($info as [$icon, $label, $val, $linkType]): ?>
                     <div
                         style="display:flex;align-items:center;gap:.65rem;margin-bottom:.85rem;font-size:.875rem;">
                         <i data-lucide="<?= $icon ?>"
                             style="width:16px;height:16px;color:var(--primary);flex-shrink:0;"></i>
                         <span style="color:var(--text-muted);min-width:70px;"><?= $label ?></span>
-                        <span style="font-weight:600;word-break:break-all;"><?= htmlspecialchars((string) $val) ?></span>
+                        <span style="font-weight:600;word-break:break-all;">
+                            <?php if ($linkType && $val !== '—'): ?>
+                                <a href="<?= $linkType === 'http' && !preg_match('#^https?://#', $val) ? "https://{$val}" : "{$linkType}:{$val}" ?>" 
+                                   style="color:var(--accent);text-decoration:none;" target="_blank">
+                                    <?= htmlspecialchars((string) $val) ?>
+                                </a>
+                            <?php else: ?>
+                                <?= htmlspecialchars((string) $val) ?>
+                            <?php endif; ?>
+                        </span>
                     </div>
                 <?php endforeach; ?>
             </div>
@@ -175,10 +182,7 @@ $catLabel  = $CATEGORY_LABELS[$s['category']] ?? $s['category'];
                 </thead>
                 <tbody>
                     <?php if (empty($history)): ?>
-                        <tr>
-                            <td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted);">No
-                                procurement history yet.</td>
-                        </tr>
+                        <?= renderEmptyState('No procurement history yet.', 'history') ?>
                     <?php else:
                         foreach ($history as $h):
                             $STAT_COLORS = [
@@ -194,7 +198,13 @@ $catLabel  = $CATEGORY_LABELS[$s['category']] ?? $s['category'];
                                 </td>
                                 <td><?= htmlspecialchars($h['item_description']) ?></td>
                                 <td><?= number_format($h['quantity'], 2) ?> <?= htmlspecialchars($h['unit']) ?></td>
-                                <td><?= CURRENCY_SYMBOL ?><?= number_format($h['estimated_total_cost'], 2) ?></td>
+                                <td>
+                                    <?php if ($authUser->hasPermission('procurement.view')): ?>
+                                        <?= CURRENCY_SYMBOL ?><?= number_format($h['estimated_total_cost'], 2) ?>
+                                    <?php else: ?>
+                                        <span style="color:var(--text-muted);font-size:0.8rem;">Restricted</span>
+                                    <?php endif; ?>
+                                </td>
                                 <td style="font-size:.8rem;"><?= date('M d, Y', strtotime($h['request_date'])) ?></td>
                                 <td><span
                                         class="badge badge-<?= $STAT_COLORS[$h['status']] ?? 'secondary' ?>"><?= ucfirst(str_replace('_', ' ', $h['status'])) ?></span>

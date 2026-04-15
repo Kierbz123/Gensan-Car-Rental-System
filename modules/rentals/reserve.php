@@ -105,6 +105,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $seenVehicleIds[] = $vid;
                 $driverId    = !empty($postedDriverIds[$idx])    ? (int)$postedDriverIds[$idx]    : null;
                 $chauffFee   = isset($postedChauffeurFees[$idx]) ? (float)$postedChauffeurFees[$idx] : 0.0;
+                
+                // Scrub data based on rental type to prevent front-end bypasses
+                if ($postRentalType === 'self_drive') {
+                    $driverId = null;
+                    $chauffFee = 0.0;
+                } elseif ($postRentalType === 'chauffeur' && !$driverId) {
+                    $vRow = $vehicleMap[$vid];
+                    $error = "Please assign a driver for \"{$vRow['brand']} {$vRow['model']}\" (Chauffeur mode requires it).";
+                    break;
+                }
                 if ($chauffFee < 0) $chauffFee = 0.0;
 
                 $selectedVehicles[] = [

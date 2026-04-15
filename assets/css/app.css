@@ -2268,3 +2268,20 @@ select.border-secondary-200 {
     padding: var(--space-4);
   }
 }
+
+/* ── X. Layout Utilities ────────────────────────────────────────── */
+.grid-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-6);
+  align-items: start;
+}
+
+@media (min-width: 900px) {
+  .grid-layout-1-2 {
+    grid-template-columns: 1fr 2fr;
+  }
+  .grid-layout-320 {
+    grid-template-columns: 320px 1fr;
+  }
+}

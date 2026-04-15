@@ -306,3 +306,40 @@ function pagination(int $total, int $page, int $perPage, string $urlPattern = ''
 
     return $html;
 }
+
+/**
+ * UI Component: Floating Toast Notification
+ */
+function renderToast($message, $type = 'success', $id = 'toast-msg')
+{
+    if (empty($message)) return '';
+    $icon = $type === 'success' ? 'check-circle' : 'alert-circle';
+    $bg = $type === 'success' ? 'var(--success)' : 'var(--danger)';
+    
+    return <<<HTML
+    <div id="{$id}" style="position:fixed;top:1.5rem;right:1.5rem;z-index:9999;display:flex;align-items:center;gap:.75rem;background:{$bg};color:#fff;padding:.875rem 1.25rem;border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.18);font-size:.9rem;font-weight:600;min-width:280px;max-width:380px;">
+        <i data-lucide="{$icon}" style="width:20px;height:20px;flex-shrink:0;"></i>
+        <span>
+            {$message}
+        </span>
+    </div>
+    <script>setTimeout(() => { document.getElementById('{$id}')?.remove(); }, 3500);</script>
+HTML;
+}
+
+/**
+ * UI Component: Empty State for Tables/Cards
+ */
+function renderEmptyState($message = 'No data available', $icon = 'inbox', $colSpan = 6)
+{
+    return <<<HTML
+    <tr>
+        <td colspan="{$colSpan}" style="text-align:center;padding:3rem 1rem;color:var(--text-muted);">
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.75rem;">
+                <i data-lucide="{$icon}" style="width:36px;height:36px;color:var(--primary-200);"></i>
+                <span style="font-weight:500;">{$message}</span>
+            </div>
+        </td>
+    </tr>
+HTML;
+}

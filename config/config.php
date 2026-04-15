@@ -175,6 +175,15 @@ define('PR_APPROVAL_LEVEL2_LIMIT', 20000);
 define('QR_CODE_SIZE', 300);
 define('QR_CODE_FORMAT', 'png');
 
+// Public QR Scan endpoint — the URL embedded in every vehicle QR code.
+// Points to vehicle-scan.php (no login required) instead of the admin vehicle-details page.
+// APP_URL already resolves localhost → LAN IP so phones on the same Wi-Fi can open it.
+define('SCAN_URL', APP_URL . 'vehicle-scan.php');
+
+// HMAC secret for stateless QR token validation.
+// Set QR_HMAC_SECRET in .env for production to isolate it from ENCRYPTION_KEY.
+define('QR_HMAC_SECRET', $_ENV['QR_HMAC_SECRET'] ?? ENCRYPTION_KEY);
+
 // Load additional configurations
 require_once CONFIG_PATH . 'constants.php';
 require_once CONFIG_PATH . 'database.php';

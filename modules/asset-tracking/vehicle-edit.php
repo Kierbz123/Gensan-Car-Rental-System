@@ -46,6 +46,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $vehicle->update($vehicleId, $data, $authUser->getId());
 
             if (isset($data['new_status']) && $data['new_status'] !== $vehicleData['current_status']) {
+                // Server-side enforcement: reason + mileage required for non-trivial status changes
+                $statusesThatRequireDetails = ['maintenance', 'cleaning', 'out_of_service', 'retired'];
+                if (in_array($data['new_status'], $statusesThatRequireDetails, true)) {
+                    if (empty(trim($data['status_reason'] ?? ''))) {
+                        throw new Exception("A reason is required when changing status to '" . $data['new_status'] . "'.");
+                    }
+                    if (!isset($data['status_mileage']) || $data['status_mileage'] === '') {
+                        throw new Exception("Current mileage is required when changing vehicle status.");
+                    }
+                }
                 $vehicle->updateStatus(
                     $vehicleId,
                     $data['new_status'],
@@ -466,25 +476,43 @@ function vehiclePhotoSelected(input) {
 </script>
 
 <script>
+var currentVehicleStatus = <?= json_encode($vehicleData['current_status']) ?>;
+
 function onStatusChange() {
     const statusInputs = document.querySelectorAll('input[name="new_status"]');
     const detailsCard = document.getElementById('statusDetailsCard');
     const locInput = document.getElementById('status_location');
     const reasonInput = document.getElementById('status_reason');
     const mileageInput = document.getElementById('status_mileage');
-    
+
     let isChanged = false;
     let selectedStatus = '';
-    
+
     statusInputs.forEach(input => {
         if (input.checked) {
             selectedStatus = input.value;
-            // The first radio button is always the current status in our layout
-            isChanged = (input.value !== "<?= htmlspecialchars($vehicleData['current_status']) ?>");
+            isChanged = (input.value !== currentVehicleStatus);
         }
     });
 
-    if (isChanged && selectedStatus !== 'available' && selectedStatus !== 'rented') {
+    // ── Terminal state guard: confirm before allowing retired ─────────────────
+    if (isChanged && selectedStatus === 'retired') {
+        const confirmed = confirm(
+            '⚠️ WARNING: Setting status to RETIRED is a terminal action.\n' +
+            'This vehicle will be permanently removed from active fleet operations.\n\n' +
+            'This cannot be undone without system administrator intervention.\n\nProceed?'
+        );
+        if (!confirmed) {
+            // Reset to current status
+            document.querySelector('input[name="new_status"][value="' + currentVehicleStatus + '"]').checked = true;
+            onStatusChange();
+            return;
+        }
+    }
+
+    // ── Show/hide status details panel ─────────────────────────────────────
+    const alwaysShowDetail = ['maintenance', 'cleaning', 'out_of_service', 'retired'];
+    if (isChanged && alwaysShowDetail.includes(selectedStatus)) {
         detailsCard.style.display = 'block';
         locInput.required = true;
         reasonInput.required = true;

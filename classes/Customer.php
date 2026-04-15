@@ -39,6 +39,15 @@ class Customer
             throw new Exception("Primary phone number is too long (max 20 characters).");
         }
 
+        // Prevent Duplicate Identity (Phone/Email)
+        $existing = $this->db->fetchColumn(
+            "SELECT COUNT(*) FROM customers WHERE phone_primary = ? AND deleted_at IS NULL",
+            [$data['phone_primary']]
+        );
+        if ($existing > 0) {
+            throw new Exception("Conflict: A customer profile with this primary phone number already exists.");
+        }
+
         // Generate customer code
         $customerCode = $this->generateCustomerCode();
 
@@ -147,6 +156,23 @@ class Customer
         // Fix empty date of birth throwing errors for DATE type
         $dob = !empty($data['date_of_birth']) ? $data['date_of_birth'] : null;
 
+        // Validation bounds mirroring create()
+        if (strlen($data['phone_primary']) > 20) {
+            throw new Exception("Primary phone number is too long (max 20 characters).");
+        }
+        if (!empty($data['email']) && !filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
+            throw new Exception("Invalid email address format.");
+        }
+
+        // Prevent Duplicate Identity Assignment (Phone/Email)
+        $existing = $this->db->fetchColumn(
+            "SELECT COUNT(*) FROM customers WHERE phone_primary = ? AND customer_id != ? AND deleted_at IS NULL",
+            [$data['phone_primary'], $customerId]
+        );
+        if ($existing > 0) {
+            throw new Exception("Conflict: A different customer profile with this primary phone already exists.");
+        }
+
         $updates = [
             "customer_type = ?",
             "first_name = ?",
@@ -159,7 +185,8 @@ class Customer
             "address = ?",
             "city = ?",
             "province = ?",
-            "notes = ?"
+            "notes = ?",
+            "is_blacklisted = ?"
         ];
         $params = [
             $data['customer_type'] ?? 'walk_in',
@@ -173,7 +200,8 @@ class Customer
             $data['address'] ?? null,
             $data['city'] ?? 'General Santos City',
             $data['province'] ?? 'South Cotabato',
-            $data['notes'] ?? null
+            $data['notes'] ?? null,
+            isset($data['is_blacklisted']) ? (int)$data['is_blacklisted'] : 0
         ];
 
         $customerCode = $this->db->fetchColumn("SELECT customer_code FROM customers WHERE customer_id = ?", [$customerId]);

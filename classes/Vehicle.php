@@ -269,6 +269,36 @@ class Vehicle
             }
         }
 
+        // Normalise plate number to uppercase before any uniqueness/update logic
+        if (isset($data['plate_number'])) {
+            $data['plate_number'] = strtoupper(trim($data['plate_number']));
+        }
+
+        // ── Server-Side Validation (mirrors create() guards) ─────────────────
+        if (isset($data['year_model'])) {
+            $currentYear = (int) date('Y');
+            $yearModel   = (int) $data['year_model'];
+            if ($yearModel < 1990 || $yearModel > $currentYear + 1) {
+                throw new Exception("Year model must be between 1990 and " . ($currentYear + 1) . ".");
+            }
+        }
+        if (isset($data['plate_number']) && !preg_match('/^[A-Z0-9\s\-]{2,20}$/i', $data['plate_number'])) {
+            throw new Exception("Invalid plate number format. Only letters, numbers, spaces, and dashes allowed (2–20 characters).");
+        }
+        $validFuelTypes = ['gasoline', 'diesel', 'hybrid', 'electric'];
+        if (isset($data['fuel_type']) && !in_array($data['fuel_type'], $validFuelTypes, true)) {
+            throw new Exception("Invalid fuel type. Allowed: " . implode(', ', $validFuelTypes) . ".");
+        }
+        $validTransmissions = ['manual', 'automatic', 'cvt'];
+        if (isset($data['transmission']) && !in_array($data['transmission'], $validTransmissions, true)) {
+            throw new Exception("Invalid transmission type. Allowed: " . implode(', ', $validTransmissions) . ".");
+        }
+        foreach (['daily_rental_rate', 'weekly_rental_rate', 'monthly_rental_rate'] as $rateField) {
+            if (isset($data[$rateField]) && $data[$rateField] !== '' && (float) $data[$rateField] < 0) {
+                throw new Exception(ucwords(str_replace('_', ' ', $rateField)) . " cannot be negative.");
+            }
+        }
+
         // Build update query
         $updates = [];
         $params = [];
@@ -276,6 +306,7 @@ class Vehicle
         $newValues = [];
 
         $updatableFields = [
+            'category_id',
             'plate_number',
             'engine_number',
             'chassis_number',
@@ -628,10 +659,15 @@ class Vehicle
             throw new Exception("Vehicle {$vehicleId} not found.");
         }
 
-        // The URL encoded into the QR — must be an absolute URL (with scheme + hostname) so that
-        // mobile cameras (Google Lens, iPhone Camera, etc.) can open it directly after scanning.
-        // APP_URL is set in config.php using HTTP_HOST; override with APP_URL in .env for production.
-        $qrContent = APP_URL . 'modules/asset-tracking/vehicle-details.php?id=' . urlencode($vehicleId);
+        // Load the token helper (idempotent — safe to call multiple times)
+        if (!function_exists('buildScanUrl')) {
+            require_once INCLUDES_PATH . 'qr-token.php';
+        }
+
+        // The URL encoded into the QR — points to the PUBLIC vehicle-scan.php page.
+        // Protected by an HMAC token so no login is required; token is stateless.
+        // APP_URL already resolves localhost → LAN IP so phones on the same Wi-Fi can open it.
+        $qrContent = buildScanUrl($vehicleId);
 
         // Metadata stored separately in DB
         $qrData = json_encode([
@@ -657,24 +693,15 @@ class Vehicle
             require_once $libPath;
         }
 
-        if (class_exists('QRcode')) {
-            // High error-correction, pixel size 10, margin 2
-            QRcode::png($qrContent, $qrPath, QR_ECLEVEL_H, 10, 2);
-        } else {
-            // Pure-GD fallback: render a small grid as a rough visual placeholder
-            // (not actually scannable, but keeps the system from crashing)
-            $size = 300;
-            $img = imagecreatetruecolor($size, $size);
-            $white = imagecolorallocate($img, 255, 255, 255);
-            $black = imagecolorallocate($img, 0, 0, 0);
-            imagefill($img, 0, 0, $white);
-            // Draw a simple placeholder pattern
-            for ($i = 0; $i < $size; $i += 10) {
-                imagesetpixel($img, $i, $i, $black);
-            }
-            imagepng($img, $qrPath);
-            imagedestroy($img);
+        if (!class_exists('QRcode')) {
+            throw new Exception(
+                "QR code library (phpqrcode) is not installed. " .
+                "Place the library at: " . INCLUDES_PATH . "phpqrcode-master/qrlib.php"
+            );
         }
+
+        // High error-correction (H = 30% recovery), pixel size 10, margin 2
+        QRcode::png($qrContent, $qrPath, QR_ECLEVEL_H, 10, 2);
 
         // Store relative path (without BASE_PATH prefix) in database
         $relativePath = str_replace(BASE_PATH, '', $qrPath);

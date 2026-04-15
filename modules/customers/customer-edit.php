@@ -257,13 +257,10 @@ require_once '../../includes/header.php';
                             </div>
                             <div>
                                 <label
-                                    class="block text-[10px] font-black uppercase tracking-widest text-secondary-400 mb-2">Status</label>
-                                <select name="status" class="form-input w-full rounded-2xl py-3.5 bg-secondary-50">
-                                    <?php foreach (['active' => 'Active', 'inactive' => 'Inactive'] as $v => $l): ?>
-                                        <option value="<?= $v ?>" <?= ($data['status'] ?? '') === $v ? 'selected' : '' ?>>
-                                            <?= $l ?>
-                                        </option>
-                                    <?php endforeach; ?>
+                                    class="block text-[10px] font-black uppercase tracking-widest text-secondary-400 mb-2">Account Standing</label>
+                                <select name="is_blacklisted" class="form-input w-full rounded-2xl py-3.5 bg-secondary-50">
+                                    <option value="0" <?= empty($data['is_blacklisted']) ? 'selected' : '' ?>>Good Standing (Active)</option>
+                                    <option value="1" <?= !empty($data['is_blacklisted']) ? 'selected' : '' ?>>Blacklisted (High Risk)</option>
                                 </select>
                             </div>
                         </div>

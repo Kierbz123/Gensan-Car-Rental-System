@@ -58,16 +58,7 @@ $TXN_COLORS = ['receipt' => 'success', 'consumption' => 'danger', 'adjustment' =
 $TXN_LABELS = ['receipt' => 'Receipt', 'consumption' => 'Consumption', 'adjustment' => 'Adjustment', 'write_off' => 'Write-off'];
 ?>
 
-<?php if ($successMsg): ?>
-    <div id="toast-inv"
-        style="position:fixed;top:1.5rem;right:1.5rem;z-index:9999;display:flex;align-items:center;gap:.75rem;background:var(--success);color:#fff;padding:.875rem 1.25rem;border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.18);font-size:.9rem;font-weight:600;min-width:280px;max-width:380px;">
-        <i data-lucide="check-circle" style="width:20px;height:20px;flex-shrink:0;"></i>
-        <span>
-            <?= htmlspecialchars($successMsg) ?>
-        </span>
-    </div>
-    <script>setTimeout(() => { document.getElementById('toast-inv')?.remove(); }, 3500);</script>
-<?php endif; ?>
+<?php if ($successMsg) echo renderToast($successMsg, 'success', 'toast-inv'); ?>
 <?php if ($error): ?>
     <div
         style="margin-bottom:1.5rem;padding:1rem;background:var(--danger-light);color:var(--danger);border-radius:var(--radius-md);font-weight:500;display:flex;align-items:center;gap:.5rem;">
@@ -104,7 +95,7 @@ $TXN_LABELS = ['receipt' => 'Receipt', 'consumption' => 'Consumption', 'adjustme
     </div>
 </div>
 
-<div style="display:grid;grid-template-columns:320px 1fr;gap:1.5rem;align-items:start;">
+<div class="grid-layout grid-layout-320">
 
     <!-- Left: info + adjust -->
     <div style="display:flex;flex-direction:column;gap:1.5rem;">
@@ -143,7 +134,7 @@ $TXN_LABELS = ['receipt' => 'Receipt', 'consumption' => 'Consumption', 'adjustme
                 $meta = [
                     ['layers', 'Category', htmlspecialchars(ucfirst($item['item_category'])), false],
                     ['refresh-cw', 'Reorder At', htmlspecialchars(number_format($item['reorder_level'], 3) . ' ' . $item['unit']), false],
-                    ['tag', 'Unit Cost', htmlspecialchars($item['unit_cost'] ? CURRENCY_SYMBOL . number_format($item['unit_cost'], 2) : '—'), false],
+                    ['tag', 'Unit Cost', $authUser->hasPermission('procurement.view') ? htmlspecialchars($item['unit_cost'] ? CURRENCY_SYMBOL . number_format($item['unit_cost'], 2) : '—') : '<span style="color:var(--text-muted);font-size:0.8rem;">Restricted</span>', true],
                     ['truck', 'Supplier', $suppHtml, true],
                     ['map-pin', 'Location', htmlspecialchars($item['storage_location'] ?? '—'), false],
                 ];
@@ -214,10 +205,7 @@ $TXN_LABELS = ['receipt' => 'Receipt', 'consumption' => 'Consumption', 'adjustme
                 </thead>
                 <tbody>
                     <?php if (empty($txns)): ?>
-                        <tr>
-                            <td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted);">No transactions
-                                yet.</td>
-                        </tr>
+                        <?= renderEmptyState('No transactions yet.', 'list') ?>
                     <?php else:
                         foreach ($txns as $t): ?>
                             <tr>

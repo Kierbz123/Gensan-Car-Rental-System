@@ -35,11 +35,12 @@ if (session_status() === PHP_SESSION_NONE) {
 // Validate session
 $currentUser = User::validateSession();
 
-// Check if we are already on the login page to avoid redirect loops
+// Check if we are already on an exempt page to avoid redirect loops
 $currentPage = basename($_SERVER['PHP_SELF']);
-$isLoginPage = ($currentPage === 'login.php');
+$exemptPages = ['login.php', 'vehicle-scan.php'];
+$isExemptPage = in_array($currentPage, $exemptPages, true);
 
-if (!$currentUser && !$isLoginPage) {
+if (!$currentUser && !$isExemptPage) {
     // Redirect to login
     header("Location: " . BASE_URL . "login.php");
     exit;

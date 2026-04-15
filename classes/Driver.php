@@ -95,6 +95,32 @@ class Driver
     // -------------------------------------------------------
     public function update(int $driverId, array $data, int $updatedBy): bool
     {
+        // 1. Validate Email
+        if (!empty($data['email']) && !filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
+            throw new Exception("Invalid email address format.");
+        }
+
+        // 2. Prevent Duplicate License Assignment
+        $existingLicense = $this->db->fetchColumn(
+            "SELECT COUNT(*) FROM drivers WHERE license_number = ? AND driver_id != ? AND deleted_at IS NULL",
+            [$data['license_number'], $driverId]
+        );
+        if ($existingLicense > 0) {
+            throw new Exception("A different driver with license number '{$data['license_number']}' is already registered.");
+        }
+
+        // 3. Prevent marking available/inactive if currently tied to an active dispatch
+        if (isset($data['status']) && $data['status'] !== 'on_duty') {
+            $activeSchedules = (int) $this->db->fetchColumn(
+               "SELECT COUNT(*) FROM rental_agreements 
+                WHERE driver_id = ? AND status IN ('active', 'confirmed', 'reserved')", 
+               [$driverId]
+            );
+            if ($activeSchedules > 0) {
+                throw new Exception("Status override rejected: Driver is currently assigned to an active dispatch route.");
+            }
+        }
+
         $old = $this->getById($driverId);
 
         $setClauses = [

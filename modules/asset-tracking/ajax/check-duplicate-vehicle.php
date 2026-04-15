@@ -29,7 +29,7 @@ if (empty($field) || empty($value)) {
 
 $allowedFields = ['engine_number', 'chassis_number', 'plate_number'];
 
-if (!in_array($field, $allowedFields)) {
+if (!in_array($field, $allowedFields, true)) {
     echo json_encode(['error' => 'Invalid field']);
     exit;
 }

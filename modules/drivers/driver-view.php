@@ -27,7 +27,7 @@ if ($d['status'] === 'on_duty') {
         FROM rental_agreements ra
         JOIN customers c ON ra.customer_id = c.customer_id
         LEFT JOIN vehicles v ON ra.vehicle_id = v.vehicle_id
-        WHERE ra.driver_id = ? AND ra.status IN ('active', 'confirmed') 
+        WHERE ra.driver_id = ? AND ra.status IN ('active', 'confirmed', 'reserved') 
         ORDER BY ra.created_at DESC LIMIT 1
     ", [$driverId]);
 }

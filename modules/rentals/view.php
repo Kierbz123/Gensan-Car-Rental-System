@@ -79,6 +79,7 @@ try {
         WHERE ra2.customer_id     = ?
           AND ra2.rental_start_date = ?
           AND ra2.rental_end_date   = ?
+          AND ABS(TIMESTAMPDIFF(MINUTE, ra2.created_at, ?)) <= 2
           AND ra2.agreement_id    != ?
           AND ra2.status NOT IN ('cancelled')
         ORDER BY ra2.agreement_id ASC
@@ -86,6 +87,7 @@ try {
         $rental['customer_id'],
         $rental['rental_start_date'],
         $rental['rental_end_date'],
+        $rental['created_at'],
         $rentalId,
     ]);
 
@@ -313,9 +315,16 @@ require_once '../../includes/header.php';
             <!-- Action Buttons -->
             <div style="display:flex;flex-direction:column;gap:.6rem;">
                 <?php if (in_array($rental['status'], ['confirmed', 'reserved']) && $authUser->hasPermission('rentals.update')): ?>
-                    <a href="check-out.php?id=<?= $rental['agreement_id'] ?>" class="btn btn-primary" style="justify-content:center;">
-                        <i data-lucide="log-out" style="width:16px;height:16px;"></i> Perform Check-out
-                    </a>
+                    <?php if (date('Y-m-d') >= $rental['rental_start_date']): ?>
+                        <a href="check-out.php?id=<?= $rental['agreement_id'] ?>" class="btn btn-primary" style="justify-content:center;">
+                            <i data-lucide="log-out" style="width:16px;height:16px;"></i> Perform Check-out
+                        </a>
+                    <?php else: ?>
+                        <div style="background:var(--bg-muted);padding:.75rem;border-radius:var(--radius-md);text-align:center;font-size:.82rem;color:var(--text-muted);border:1px dashed var(--border-color);">
+                            <i data-lucide="clock" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px;"></i>
+                            Check-out available on <?= date('M d', strtotime($rental['rental_start_date'])) ?>
+                        </div>
+                    <?php endif; ?>
                 <?php endif; ?>
 
                 <?php if ($rental['status'] === 'active' && $authUser->hasPermission('rentals.update')): ?>

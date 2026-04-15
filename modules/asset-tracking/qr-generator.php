@@ -27,12 +27,13 @@ if (!$vehicleData) {
 // ── Early: handle download (must happen before any HTML output) ───────────────
 if ($action === 'download') {
     if (!empty($vehicleData['qr_code_path'])) {
-        $filePath = BASE_PATH . ltrim($vehicleData['qr_code_path'], '/');
-        if (is_file($filePath)) {
+        $expectedDir  = realpath(BASE_PATH . 'assets/qr-codes');
+        $resolvedPath = realpath(BASE_PATH . ltrim($vehicleData['qr_code_path'], '/'));
+        if ($resolvedPath && $expectedDir && strpos($resolvedPath, $expectedDir) === 0 && is_file($resolvedPath)) {
             header('Content-Type: image/png');
             header('Content-Disposition: attachment; filename="' . $vehicleData['vehicle_id'] . '_QR.png"');
-            header('Content-Length: ' . filesize($filePath));
-            readfile($filePath);
+            header('Content-Length: ' . filesize($resolvedPath));
+            readfile($resolvedPath);
             exit;
         }
     }
@@ -41,14 +42,22 @@ if ($action === 'download') {
 }
 
 // ── HTML Output Begins Here ───────────────────────────────────────────────────
-require_once '../../includes/header.php';
 
-// Auto-generate QR if it doesn't exist yet
+// Auto-generate QR if it doesn't exist yet — only users with update permission may trigger generation
+$qrGenerationError = null;
 $qrPath = BASE_PATH . ltrim($vehicleData['qr_code_path'] ?? '', '/');
 if (empty($vehicleData['qr_code_path']) || !file_exists($qrPath)) {
-    $vehicle->generateQRCode($vehicleId);
-    $vehicleData = $vehicle->getById($vehicleId);
+    if ($authUser->hasPermission('vehicles.update')) {
+        try {
+            $vehicle->generateQRCode($vehicleId);
+            $vehicleData = $vehicle->getById($vehicleId);
+        } catch (Exception $e) {
+            $qrGenerationError = 'QR auto-generation failed: ' . $e->getMessage();
+        }
+    }
 }
+
+require_once '../../includes/header.php';
 
 // Build URLs
 $qrFilePath = !empty($vehicleData['qr_code_path']) ? BASE_PATH . ltrim($vehicleData['qr_code_path'], '/') : '';
@@ -56,18 +65,26 @@ $qrCodeUrl  = (!empty($vehicleData['qr_code_path']) && is_file($qrFilePath))
     ? BASE_URL . $vehicleData['qr_code_path'] . '?v=' . filemtime($qrFilePath)
     : '';
 
+require_once BASE_PATH . 'includes/qr-token.php';
+$correctUrl = buildScanUrl($vehicleId);
+
 // The URL embedded inside the QR code (absolute, for mobile scanners)
 $qrData      = json_decode($vehicleData['qr_code_data'] ?? '{}', true);
-$embeddedUrl = $qrData['url'] ?? (APP_URL . 'modules/asset-tracking/vehicle-details.php?id=' . urlencode($vehicleId));
+$embeddedUrl = $qrData['url'] ?? $correctUrl;
 
-// Detect if the stored QR code still has a localhost URL (generated before the LAN-IP fix)
+// SEC-03: Ensure embedded URL uses a safe scheme (guard against DB tampering)
+if (!preg_match('#^https?://#i', $embeddedUrl)) {
+    $embeddedUrl = $correctUrl;
+}
+
+// Detect if stored QR still has a localhost URL (generated before the LAN-IP fix)
 $qrHasLocalhost = (
     str_contains($embeddedUrl, '://localhost') ||
     str_contains($embeddedUrl, '://127.0.0.1')
 );
 
-// The correct absolute URL that a new QR should use
-$correctUrl = APP_URL . 'modules/asset-tracking/vehicle-details.php?id=' . urlencode($vehicleId);
+// Detect if stored QR still points to the old admin page (generated before vehicle-scan.php)
+$qrPointsToAdmin = str_contains($embeddedUrl, 'vehicle-details.php');
 
 
 // ── Handle print view ────────────────────────────────────────────────────────
@@ -204,7 +221,32 @@ if ($action === 'print') {
     </div>
 </div>
 
+<?php if (!empty($qrGenerationError)): ?>
+<div style="max-width:960px; margin:0 auto var(--space-4); background:#fef2f2; border:1.5px solid #fca5a5; border-radius:var(--radius-md); padding:var(--space-4); display:flex; align-items:flex-start; gap:12px;">
+    <i data-lucide="x-circle" style="width:20px;height:20px;color:#dc2626;flex-shrink:0;margin-top:1px;"></i>
+    <div>
+        <div style="font-weight:700; color:#991b1b; margin-bottom:4px;">QR Code Generation Failed</div>
+        <div style="font-size:0.85rem; color:#7f1d1d;"><?= htmlspecialchars($qrGenerationError) ?></div>
+    </div>
+</div>
+<?php endif; ?>
+
+<?php if ($qrPointsToAdmin && !$qrHasLocalhost): ?>
+<div style="max-width:960px; margin:0 auto var(--space-4); background:#fff7ed; border:1.5px solid #fed7aa; border-radius:var(--radius-md); padding:var(--space-4); display:flex; align-items:flex-start; gap:12px;">
+    <i data-lucide="refresh-cw" style="width:20px;height:20px;color:#ea580c;flex-shrink:0;margin-top:1px;"></i>
+    <div style="flex:1;">
+        <div style="font-weight:700; color:#9a3412; margin-bottom:4px;">QR Code Uses Old Admin URL</div>
+        <div style="font-size:0.85rem; color:#c2410c; margin-bottom:8px;">This QR was generated before <code>vehicle-scan.php</code> was deployed. It links to the admin page (login required) instead of the public scan page.</div>
+        <button type="button" onclick="regenerateQR(<?= htmlspecialchars(json_encode($vehicleId)) ?>)"
+            style="background:#ea580c;color:#fff;border:none;border-radius:6px;padding:8px 18px;font-weight:700;font-size:0.85rem;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">
+            <i data-lucide="refresh-cw" style="width:14px;height:14px;"></i> Regenerate Now
+        </button>
+    </div>
+</div>
+<?php endif; ?>
+
 <?php if ($qrHasLocalhost): ?>
+
 <div style="max-width:960px; margin:0 auto var(--space-4); background:#fef2f2; border:1.5px solid #fca5a5; border-radius:var(--radius-md); padding:var(--space-4); display:flex; align-items:flex-start; gap:12px;">
     <i data-lucide="alert-triangle" style="width:20px;height:20px;color:#dc2626;flex-shrink:0;margin-top:1px;"></i>
     <div style="flex:1;">
@@ -448,6 +490,8 @@ if ($action === 'print') {
 <script>
     lucide.createIcons();
 
+    var csrfToken = <?= json_encode(getCsrfToken()) ?>;
+
     function copyUrl() {
         var url = document.getElementById('embeddedUrl').textContent.trim();
         navigator.clipboard.writeText(url).then(function () {
@@ -488,7 +532,7 @@ if ($action === 'print') {
                 alert('A network error occurred. Please try again.');
                 if (btn) { btn.disabled = false; }
             };
-            xhr.send('vehicle_id=' + encodeURIComponent(vehicleId) + '&csrf_token=<?= getCsrfToken() ?>');
+            xhr.send('vehicle_id=' + encodeURIComponent(vehicleId) + '&csrf_token=' + encodeURIComponent(csrfToken));
         }
     }
 </script>

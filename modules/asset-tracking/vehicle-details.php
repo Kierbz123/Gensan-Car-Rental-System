@@ -85,6 +85,8 @@ $maintenanceHistory = $db->fetchAll("
 $complianceRecords = $db->fetchAll("
     SELECT * FROM compliance_records 
     WHERE vehicle_id = ?
+      AND status NOT IN ('pending', 'cancelled')
+      AND expiry_date IS NOT NULL
     ORDER BY expiry_date ASC",
     [$vehicleId]
 );
@@ -94,7 +96,8 @@ $rentalHistory = $db->fetchAll("
     FROM rental_agreements ra
     JOIN customers c ON ra.customer_id = c.customer_id
     WHERE ra.vehicle_id = ?
-    ORDER BY ra.rental_start_date DESC",
+    ORDER BY ra.rental_start_date DESC
+    LIMIT 20",
     [$vehicleId]
 );
 
@@ -202,13 +205,18 @@ $rentalHistory = $db->fetchAll("
                     </p>
 
                     <?php
-                    $statusColor = 'var(--secondary-500)';
-                    if ($vehicleData['current_status'] === 'available')
-                        $statusColor = 'var(--success)';
-                    if ($vehicleData['current_status'] === 'rented')
-                        $statusColor = 'var(--warning)';
-                    if ($vehicleData['current_status'] === 'maintenance')
-                        $statusColor = 'var(--danger)';
+                    global $VEHICLE_STATUS_COLORS;
+                    $cssColorMap = [
+                        'success'   => 'var(--success)',
+                        'danger'    => 'var(--danger)',
+                        'warning'   => 'var(--warning)',
+                        'info'      => 'var(--info, #3b82f6)',
+                        'purple'    => '#7c3aed',
+                        'secondary' => 'var(--secondary-500)',
+                        'dark'      => '#1e293b',
+                    ];
+                    $colorKey    = $VEHICLE_STATUS_COLORS[$vehicleData['current_status']] ?? 'secondary';
+                    $statusColor = $cssColorMap[$colorKey] ?? 'var(--secondary-500)';
                     ?>
                     <div
                         style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; background: <?= $statusColor ?>; color: white; border-radius: var(--radius-full); font-size: 0.75rem; font-weight: bold; text-transform: uppercase;">
@@ -239,12 +247,27 @@ $rentalHistory = $db->fetchAll("
                 </div>
             </div>
 
+            <?php
+            // Check for compliance breaches before allowing deployment
+            $hasBreachedCompliance = false;
+            foreach ($complianceRecords as $comp) {
+                if (!empty($comp['expiry_date']) && strtotime($comp['expiry_date']) < time()) {
+                    $hasBreachedCompliance = true;
+                    break;
+                }
+            }
+            ?>
             <div style="display: flex; flex-direction: column; gap: var(--space-3);">
-                <?php if ($vehicleData['current_status'] === 'available'): ?>
+                <?php if ($vehicleData['current_status'] === 'available' && !$hasBreachedCompliance): ?>
                     <a href="../rentals/reserve.php?vehicle_id=<?php echo urlencode($vehicleId); ?>" class="btn btn-primary"
                         style="justify-content: center;">
                         <i data-lucide="key" class="w-4 h-4"></i> Deploy Asset
                     </a>
+                <?php elseif ($vehicleData['current_status'] === 'available' && $hasBreachedCompliance): ?>
+                    <div class="btn" title="Cannot deploy — compliance breach detected. Renew expired documents first."
+                        style="justify-content: center; background: var(--danger-light, #fee2e2); color: var(--danger); border: 1px solid var(--danger); cursor: not-allowed;">
+                        <i data-lucide="shield-off" class="w-4 h-4"></i> Deploy Blocked
+                    </div>
                 <?php endif; ?>
                 <?php if ($authUser->hasPermission('vehicles.update')): ?>
                     <a href="vehicle-edit.php?id=<?php echo urlencode($vehicleId); ?>" class="btn btn-secondary"

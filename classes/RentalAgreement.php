@@ -94,6 +94,30 @@ class RentalAgreement
         $driverId     = !empty($data['driver_id']) ? (int)$data['driver_id'] : null;
         $chauffeurFee = (float)($data['chauffeur_fee'] ?? 0);
 
+        // Security: Prune invalid payloads based on rental type
+        if ($rentalType === 'self_drive') {
+            $driverId = null;
+            $chauffeurFee = 0.0;
+        } elseif ($rentalType === 'chauffeur') {
+            if (!$driverId) {
+                throw new Exception("A chauffeur driver must be explicitly assigned for a chauffeur-driven reservation.");
+            }
+        }
+
+        // Check for driver schedule conflicts (race-condition safe — inside tx)
+        if ($driverId) {
+            $driverOverlap = $this->db->fetchOne(
+                "SELECT agreement_id FROM rental_agreements
+                 WHERE driver_id = ?
+                   AND status NOT IN ('cancelled', 'returned', 'completed')
+                   AND rental_start_date < ? AND rental_end_date > ?",
+                [$driverId, $data['end_date'], $data['start_date']]
+            );
+            if ($driverOverlap) {
+                throw new Exception("The selected driver is already assigned to active Booking #{$driverOverlap['agreement_id']} during these dates. Driver double-booking is not allowed.");
+            }
+        }
+
         // Insert agreement
         $agreementId = $this->db->insert(
             "INSERT INTO rental_agreements

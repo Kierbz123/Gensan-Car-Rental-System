@@ -25,7 +25,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $error = "Access Denied: Role mismatch for " . strtoupper(str_replace('_', ' ', $selectedRole));
             } else {
                 $_SESSION['success_message'] = 'Login successful. Welcome back!';
-                header("Location: modules/dashboard/index.php");
+                // QR Scanner role: redirect back to scan page (with optional return URL)
+                if ($authenticatedUser['role'] === 'qr_scanner') {
+                    $returnUrl = trim($_GET['return'] ?? '');
+                    // Only allow return to vehicle-scan.php — guard against open-redirect
+                    if (!empty($returnUrl) && str_starts_with($returnUrl, 'vehicle-scan.php?')) {
+                        header("Location: " . BASE_URL . htmlspecialchars($returnUrl, ENT_QUOTES));
+                    } else {
+                        header("Location: " . BASE_URL . "vehicle-scan.php");
+                    }
+                } else {
+                    header("Location: modules/dashboard/index.php");
+                }
                 exit;
             }
         } else {
@@ -209,6 +220,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 review repair logs.</p>
                         </div>
                     </div>
+
+                    <!-- General Staff -->
+                    <div class="role-card" onclick="selectRole('')">
+                        <i data-lucide="users"></i>
+                        <div class="role-card__content">
+                            <p class="role-card__title">General Staff</p>
+                            <p class="role-card__description">Login for Customer Service, Mechanics, Viewers, and other employees.</p>
+                        </div>
+                    </div>
+
                 </div>
             </div>
 
@@ -272,7 +293,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             document.getElementById('role').value = roleCode;
 
             // Format role name for display
-            const roleName = roleCode.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+            let roleName = 'General Staff';
+            if (roleCode) {
+                roleName = roleCode.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+            }
             document.getElementById('selectedRoleText').textContent = roleName + ' Login';
 
             // Switch views

@@ -53,6 +53,7 @@ define('ROLE_MAINTENANCE_SUPERVISOR', 'maintenance_supervisor');
 define('ROLE_CUSTOMER_SERVICE', 'customer_service_staff');
 define('ROLE_MECHANIC', 'mechanic');
 define('ROLE_VIEWER', 'viewer');
+define('ROLE_QR_SCANNER', 'qr_scanner');
 
 $ROLE_PERMISSIONS = [
     ROLE_SYSTEM_ADMIN => ['*'], // All permissions
@@ -121,6 +122,13 @@ $ROLE_PERMISSIONS = [
         'vehicles.view',
         'reports.view',
         'settings.view'
+    ],
+
+    // QR Scanner: can only access the public vehicle scan page.
+    // No dashboard, no reports, no admin modules.
+    ROLE_QR_SCANNER => [
+        'vehicles.scan',
+        'vehicles.view',
     ]
 ];
 
