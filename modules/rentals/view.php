@@ -95,6 +95,19 @@ try {
     redirect('../../modules/rentals/index.php', 'Database Error: ' . $e->getMessage(), 'error');
 }
 
+// ── Compliance Check ─────────────────────────────────────────────────────────
+$hasBreachedCompliance = false;
+$hasWarningCompliance  = false;
+$complianceRecords = $db->fetchAll("SELECT expiry_date FROM compliance_records WHERE vehicle_id = ? AND status NOT IN ('pending', 'cancelled') AND expiry_date IS NOT NULL", [$rental['vehicle_id']]);
+foreach ($complianceRecords as $comp) {
+    $expTime = strtotime($comp['expiry_date']);
+    if ($expTime < time()) {
+        $hasBreachedCompliance = true;
+    } elseif ($expTime < (time() + (30 * 86400))) {
+        $hasWarningCompliance = true;
+    }
+}
+
 // ── Derived values ────────────────────────────────────────────────────────────
 $amountPaid   = (float)($rental['amount_paid']   ?? 0);
 $totalAmount  = (float) $rental['total_amount'];
@@ -315,7 +328,17 @@ require_once '../../includes/header.php';
             <!-- Action Buttons -->
             <div style="display:flex;flex-direction:column;gap:.6rem;">
                 <?php if (in_array($rental['status'], ['confirmed', 'reserved']) && $authUser->hasPermission('rentals.update')): ?>
-                    <?php if (date('Y-m-d') >= $rental['rental_start_date']): ?>
+                    <?php if ($hasBreachedCompliance): ?>
+                        <div style="margin-bottom:.5rem;background:var(--danger-light,#fee2e2);color:var(--danger,#dc2626);border:1px dashed var(--danger);padding:.5rem;border-radius:var(--radius-md);text-align:center;font-size:.78rem;font-weight:bold;">
+                            <i data-lucide="shield-alert" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px;"></i> Compliance Breach!
+                        </div>
+                    <?php elseif ($hasWarningCompliance): ?>
+                        <div style="margin-bottom:.5rem;background:var(--warning-light,#fef3c7);color:var(--warning-dark,#b45309);border:1px dashed var(--warning);padding:.5rem;border-radius:var(--radius-md);text-align:center;font-size:.78rem;font-weight:bold;">
+                            <i data-lucide="shield-alert" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px;"></i> Compliance Expiring!
+                        </div>
+                    <?php endif; ?>
+                    
+                    <?php if (date('Y-m-d') >= substr($rental['rental_start_date'], 0, 10)): ?>
                         <a href="check-out.php?id=<?= $rental['agreement_id'] ?>" class="btn btn-primary" style="justify-content:center;">
                             <i data-lucide="log-out" style="width:16px;height:16px;"></i> Perform Check-out
                         </a>
@@ -397,7 +420,7 @@ require_once '../../includes/header.php';
                     </h2>
                 </div>
                 <div class="card-body">
-                    <div class="detail-grid">
+                    <div class="detail-grid" style="border: 2px solid var(--primary, #3b82f6); box-shadow: 0 4px 12px var(--primary-100, rgba(59,130,246,0.2)); padding: 1rem; border-radius: var(--radius-md);">
                         <div>
                             <span class="detail-label">Customer</span>
                             <p class="detail-value">
@@ -466,7 +489,7 @@ require_once '../../includes/header.php';
                     </span>
                 </div>
                 <div class="card-body">
-                    <div class="detail-grid" style="background:var(--bg-body);padding:1rem;border-radius:var(--radius-md);">
+                    <div class="detail-grid" style="background:var(--bg-body);padding:1rem;border-radius:var(--radius-md); border: 2px solid var(--primary, #3b82f6); box-shadow: 0 4px 12px var(--primary-100, rgba(59,130,246,0.2));">
                         <div>
                             <span class="detail-label">Pickup Date</span>
                             <p class="detail-value"><?= date('F j, Y', strtotime($rental['rental_start_date'])) ?></p>
@@ -543,7 +566,7 @@ require_once '../../includes/header.php';
             <?php endif; ?>
 
             <!-- 4. Financial Summary -->
-            <div class="card" style="border:2px solid var(--primary-100,rgba(59,130,246,.15));">
+            <div class="card" style="border: 2px solid var(--primary, #3b82f6); box-shadow: 0 4px 12px var(--primary-100, rgba(59,130,246,0.2));">
                 <div class="card-header">
                     <h2 class="card-title">
                         <i data-lucide="banknote" style="width:16px;height:16px;margin-right:6px;vertical-align:-2px;color:var(--primary)"></i>

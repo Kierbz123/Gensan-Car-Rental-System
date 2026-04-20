@@ -9,16 +9,27 @@ $db = Database::getInstance();
 
 // Load data for form dropdowns
 $vehicles = $db->fetchAll("
-    SELECT vehicle_id, plate_number, brand, model, year_model, daily_rental_rate, security_deposit_amount
-    FROM vehicles
-    WHERE current_status = ? AND deleted_at IS NULL
-    ORDER BY brand, model",
+    SELECT v.vehicle_id, v.plate_number, v.brand, v.model, v.year_model, v.daily_rental_rate, v.security_deposit_amount,
+           (SELECT MIN(expiry_date) FROM compliance_records cr 
+            WHERE cr.vehicle_id = v.vehicle_id AND cr.status NOT IN ('pending', 'cancelled') AND cr.expiry_date IS NOT NULL) as min_expiry
+    FROM vehicles v
+    WHERE v.current_status = ? AND v.deleted_at IS NULL
+    ORDER BY v.brand, v.model",
     [VEHICLE_STATUS_AVAILABLE]
 );
 
 // Build a keyed lookup map for fast server-side rate verification
 $vehicleMap = [];
-foreach ($vehicles as $v) {
+foreach ($vehicles as &$v) {
+    $v['compliance_status'] = 'valid';
+    if (!empty($v['min_expiry'])) {
+        $expTime = strtotime($v['min_expiry']);
+        if ($expTime < time()) {
+            $v['compliance_status'] = 'breached';
+        } elseif ($expTime < (time() + (30 * 24 * 60 * 60))) {
+            $v['compliance_status'] = 'warning';
+        }
+    }
     $vehicleMap[$v['vehicle_id']] = $v;
 }
 
@@ -187,6 +198,7 @@ $vehicleJsonMap = json_encode(array_map(fn($v) => [
     'label'   => "{$v['brand']} {$v['model']} ({$v['year_model']}) — {$v['plate_number']}",
     'rate'    => (float)$v['daily_rental_rate'],
     'deposit' => (float)$v['security_deposit_amount'],
+    'comp'    => $v['compliance_status']
 ], $vehicles), JSON_HEX_TAG);
 ?>
 
@@ -368,12 +380,22 @@ $vehicleJsonMap = json_encode(array_map(fn($v) => [
                             <div style="flex:1;">
                                 <select id="vehicle-picker" class="form-control">
                                     <option value="">— Select a vehicle to add —</option>
-                                    <?php foreach ($vehicles as $v): ?>
-                                        <option value="<?= $v['vehicle_id'] ?>"
+                                    <?php foreach ($vehicles as $v):
+                                        $labelSuffix = '';
+                                        $style = '';
+                                        if ($v['compliance_status'] === 'breached') {
+                                            $labelSuffix = ' [BREACHED]';
+                                            $style = 'color: var(--danger, #ef4444); font-weight: bold;';
+                                        } elseif ($v['compliance_status'] === 'warning') {
+                                            $labelSuffix = ' [EXPIRING SOON]';
+                                            $style = 'color: var(--warning-dark, #b45309); font-weight: bold;';
+                                        }
+                                    ?>
+                                        <option value="<?= $v['vehicle_id'] ?>" style="<?= $style ?>"
                                             data-rate="<?= (float)$v['daily_rental_rate'] ?>"
                                             data-deposit="<?= (float)$v['security_deposit_amount'] ?>"
-                                            data-label="<?= htmlspecialchars("{$v['brand']} {$v['model']} ({$v['year_model']}) — {$v['plate_number']}") ?>">
-                                            <?= htmlspecialchars("{$v['brand']} {$v['model']} ({$v['year_model']}) — {$v['plate_number']}") ?>
+                                            data-label="<?= htmlspecialchars("{$v['brand']} {$v['model']} ({$v['year_model']}) — {$v['plate_number']}" . $labelSuffix) ?>">
+                                            <?= htmlspecialchars("{$v['brand']} {$v['model']} ({$v['year_model']}) — {$v['plate_number']}" . $labelSuffix) ?>
                                             · ₱<?= number_format($v['daily_rental_rate'], 2) ?>/day
                                         </option>
                                     <?php endforeach; ?>
@@ -614,6 +636,13 @@ function renderFleetList() {
         // Saved driver ID from state (survives re-renders)
         const savedDriverId = row.driverId || '';
 
+        let compBadge = '';
+        if (v.comp === 'breached') {
+            compBadge = '<span style="font-size:.65rem; background:var(--danger-100); color:var(--danger); padding:2px 6px; border-radius:4px; font-weight:800; text-transform:uppercase; margin-left:6px; vertical-align:1px;">Breached</span>';
+        } else if (v.comp === 'warning') {
+            compBadge = '<span style="font-size:.65rem; background:var(--warning-100); color:var(--warning-800); padding:2px 6px; border-radius:4px; font-weight:800; text-transform:uppercase; margin-left:6px; vertical-align:1px;">Expiring</span>';
+        }
+
         div.innerHTML = `
             <!-- hidden inputs submitted with the form -->
             <input type="hidden" name="vehicles_selected[]" value="${v.id}">
@@ -621,7 +650,7 @@ function renderFleetList() {
             <input type="hidden" name="chauffeur_fees[]"    value="${row.driverFee}" id="hidden-fee-${row.rowId}">
 
             <div>
-                <div style="font-weight:700;font-size:.9rem;margin-bottom:.2rem;">${v.label}</div>
+                <div style="font-weight:700;font-size:.9rem;margin-bottom:.2rem;">${v.label} ${compBadge}</div>
                 <div class="vehicle-badge">
                     <i data-lucide="banknote" style="width:11px;height:11px;"></i>
                     ₱${v.rate.toLocaleString('en-PH',{minimumFractionDigits:2})}/day · Deposit ₱${v.deposit.toLocaleString('en-PH',{minimumFractionDigits:2})}

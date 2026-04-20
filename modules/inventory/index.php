@@ -217,13 +217,16 @@ function buildStatUrl($filterKey) {
                     <th>
                         <a href="<?= buildSortUrl('unit_cost', $currentSortBy, $currentSortOrder) ?>" class="sortable-header">Unit Cost <?= getSortIcon('unit_cost', $currentSortBy, $currentSortOrder) ?></a>
                     </th>
+                    <th>
+                        <a href="<?= buildSortUrl('created_at', $currentSortBy, $currentSortOrder) ?>" class="sortable-header">Date Added <?= getSortIcon('created_at', $currentSortBy, $currentSortOrder) ?></a>
+                    </th>
                     <th style="text-align:right;">Actions</th>
                 </tr>
             </thead>
             <tbody>
                 <?php if (empty($items)): ?>
                     <tr>
-                        <td colspan="8">
+                        <td colspan="9">
                             <div class="empty-state">
                                 <i data-lucide="package-x" class="empty-state-icon"></i>
                                 <h3>No Inventory Found</h3>
@@ -274,6 +277,11 @@ function buildStatUrl($filterKey) {
                             </td>
                             <td>
                                 <?= $item['unit_cost'] ? CURRENCY_SYMBOL . number_format($item['unit_cost'], 2) : '—' ?>
+                            </td>
+                            <td>
+                                <span style="font-size:0.85em; color:var(--text-muted);">
+                                    <?= date('M d, Y', strtotime($item['created_at'])) ?>
+                                </span>
                             </td>
                             <td style="text-align:right;">
                                 <div style="display:inline-flex; align-items:center; gap:4px;">

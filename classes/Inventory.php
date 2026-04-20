@@ -217,6 +217,32 @@ class Inventory
     }
 
     // -------------------------------------------------------
+    // Delete item
+    // -------------------------------------------------------
+    public function delete(int $inventoryId, int $deletedBy): bool
+    {
+        $old = $this->getById($inventoryId);
+        if (!$old) return false;
+
+        $this->db->execute(
+            "DELETE FROM parts_inventory WHERE inventory_id = ?",
+            [$inventoryId]
+        );
+
+        if (class_exists('AuditLogger')) {
+            AuditLogger::log(
+                $deletedBy, null, null, 'delete', 'inventory', 'parts_inventory', $inventoryId,
+                "Deleted inventory item '{$old['item_name']}' ({$old['item_code']})",
+                json_encode($old), null,
+                $_SERVER['REMOTE_ADDR'] ?? null, $_SERVER['HTTP_USER_AGENT'] ?? null,
+                'POST', '/inventory/delete', 'warning'
+            );
+        }
+
+        return true;
+    }
+
+    // -------------------------------------------------------
     // Get single item
     // -------------------------------------------------------
     public function getById(int $id): ?array
@@ -284,7 +310,7 @@ class Inventory
         $sortOrder = 'ASC';
 
         if (!empty($filters['sort_by'])) {
-            $allowedSorts = ['pi.item_code', 'pi.item_name', 'pi.item_category', 'pi.quantity_on_hand', 'pi.reorder_level', 'pi.unit_cost'];
+            $allowedSorts = ['pi.item_code', 'pi.item_name', 'pi.item_category', 'pi.quantity_on_hand', 'pi.reorder_level', 'pi.unit_cost', 'pi.created_at'];
             $sortByParam = $filters['sort_by'];
             if (strpos($sortByParam, '.') === false && in_array('pi.' . $sortByParam, $allowedSorts)) {
                 $sortByParam = 'pi.' . $sortByParam;

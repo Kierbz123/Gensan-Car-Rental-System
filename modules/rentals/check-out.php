@@ -28,6 +28,21 @@ if (!$rental) {
     redirect('modules/rentals/', 'Rental not found or not in dispatchable state', 'error');
 }
 
+$complianceRecords = $db->fetchAll("SELECT compliance_type, expiry_date FROM compliance_records WHERE vehicle_id = ? AND status NOT IN ('pending', 'cancelled') AND expiry_date IS NOT NULL", [$rental['vehicle_id']]);
+$hasBreachedCompliance = false;
+$hasWarningCompliance = false;
+$breachDetails = [];
+foreach ($complianceRecords as $comp) {
+    $expTime = strtotime($comp['expiry_date']);
+    if ($expTime < time()) {
+        $hasBreachedCompliance = true;
+        $breachDetails[] = str_replace('_', ' ', $comp['compliance_type']) . " expired on " . date('M d, Y', $expTime);
+    } elseif ($expTime < (time() + (30 * 86400))) {
+        $hasWarningCompliance = true;
+        $breachDetails[] = str_replace('_', ' ', $comp['compliance_type']) . " expires on " . date('M d, Y', $expTime);
+    }
+}
+
 $errors = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -69,14 +84,34 @@ require_once '../../includes/header.php';
     </div>
 
     <?php if (!empty($errors)): ?>
-        <div
-            class="flex items-center gap-3 p-4 mb-6 bg-danger-50 border border-danger-100 rounded-2xl text-danger-700 text-xs font-bold">
+        <div class="flex items-center gap-3 p-4 mb-6 bg-danger-50 border border-danger-100 rounded-2xl text-danger-700 text-xs font-bold">
             <i data-lucide="alert-circle" class="w-4 h-4"></i>
             <ul style="margin:0; padding-left: 1rem; list-style-type: disc;">
                 <?php foreach ($errors as $e): ?>
                     <li><?= htmlspecialchars($e) ?></li>
                 <?php endforeach; ?>
             </ul>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($hasBreachedCompliance || $hasWarningCompliance): ?>
+        <?php 
+            $alertBg = $hasBreachedCompliance ? 'bg-danger-50 border-danger-200 text-danger-700' : 'bg-warning-50 border-warning-200 text-warning-800'; 
+            $alertTitle = $hasBreachedCompliance ? 'Compliance Breach Detected' : 'Compliance Documents Expiring Soon';
+        ?>
+        <div class="flex flex-col gap-2 p-4 mb-6 border rounded-2xl <?= $alertBg ?> text-sm">
+            <div class="flex items-center gap-3 font-bold">
+                <i data-lucide="shield-alert" class="w-5 h-5"></i>
+                <?= $alertTitle ?>
+            </div>
+            <div class="text-xs ml-8">
+                The following document issues were detected for this vehicle. Please acknowledge these issues before dispatching:
+                <ul class="mt-2 mb-0 pl-8 list-disc font-semibold" style="margin-left: 2rem;">
+                    <?php foreach ($breachDetails as $detail): ?>
+                        <li><?= htmlspecialchars($detail) ?></li>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
         </div>
     <?php endif; ?>
 

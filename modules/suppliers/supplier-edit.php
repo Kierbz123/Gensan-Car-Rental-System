@@ -42,9 +42,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!validateCsrfToken($_POST['csrf_token'] ?? '')) {
         $error = 'Invalid security token.';
     } else {
-        $data = array_merge($data, array_map(function ($v) { return is_string($v) ? trim($v) : $v; }, $_POST));
-        $data['is_accredited'] = isset($_POST['is_accredited']) ? 1 : 0;
-        $data['is_active']     = isset($_POST['is_active']) ? 1 : 0;
+        if (isset($_POST['action']) && $_POST['action'] === 'delete') {
+            // Delete Action Handler
+            if (!$authUser->hasPermission('suppliers.delete')) {
+                $error = 'You do not have permission to delete this supplier.';
+            } else {
+                try {
+                    $supplierObj->delete($supplierId, $authUser->getData()['user_id']);
+                    redirect('modules/suppliers/', 'Supplier deleted successfully.', 'success');
+                } catch (Exception $e) {
+                    $error = $e->getMessage();
+                }
+            }
+        } else {
+            // Update Action Handler
+            $data = array_merge($data, array_map(function ($v) { return is_string($v) ? trim($v) : $v; }, $_POST));
+            $data['is_accredited'] = isset($_POST['is_accredited']) ? 1 : 0;
+            $data['is_active']     = isset($_POST['is_active']) ? 1 : 0;
 
         if (empty($data['company_name'])) $error = 'Company name is required.';
         elseif (empty($data['phone_primary'])) $error = 'Primary phone is required.';
@@ -58,6 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } catch (Exception $e) {
                 $error = $e->getMessage();
             }
+        }
         }
     }
 }
@@ -243,11 +258,18 @@ $BIZ_TYPES = [
         </div>
     </div>
 
-    <div style="display:flex;gap:.75rem;">
-        <button type="submit" class="btn btn-primary">
-            <i data-lucide="save" style="width:16px;height:16px;"></i> Save Changes
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div style="display:flex;gap:.75rem;">
+            <button type="submit" class="btn btn-primary">
+                <i data-lucide="save" style="width:16px;height:16px;"></i> Save Changes
+            </button>
+            <a href="supplier-view.php?id=<?= $supplierId ?>" class="btn btn-secondary">Cancel</a>
+        </div>
+        <?php if ($authUser->hasPermission('suppliers.delete')): ?>
+        <button type="button" class="btn btn-danger" onclick="var f=this.closest('form'); openGcrModal('Delete Supplier', 'Are you sure you want to delete this supplier? This action will mark the supplier as inactive.', function() { var inp=document.createElement('input'); inp.type='hidden'; inp.name='action'; inp.value='delete'; f.appendChild(inp); f.submit(); }, { variant: 'danger', icon: 'trash-2', confirmLabel: 'Yes, Delete' });">
+            <i data-lucide="trash-2" style="width:16px;height:16px;"></i> Delete Supplier
         </button>
-        <a href="supplier-view.php?id=<?= $supplierId ?>" class="btn btn-secondary">Cancel</a>
+        <?php endif; ?>
     </div>
 </form>
 

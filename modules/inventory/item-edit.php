@@ -37,7 +37,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!validateCsrfToken($_POST['csrf_token'] ?? '')) {
         $error = 'Invalid security token.';
     } else {
-        $data = array_merge($data, [
+        if (isset($_POST['action']) && $_POST['action'] === 'delete') {
+            if (!$authUser->hasPermission('inventory.delete')) {
+                $error = 'You do not have permission to delete this item.';
+            } else {
+                try {
+                    $inv->delete($itemId, $authUser->getData()['user_id']);
+                    redirect('modules/inventory/', 'Inventory item deleted successfully.', 'success');
+                } catch (Exception $e) {
+                    $error = $e->getMessage();
+                }
+            }
+        } else {
+            $data = array_merge($data, [
             'item_name' => trim($_POST['item_name'] ?? ''),
             'item_category' => $_POST['item_category'] ?? 'parts',
             'unit' => trim($_POST['unit'] ?? 'pcs'),
@@ -85,6 +97,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } catch (Exception $e) {
                 $error = $e->getMessage();
             }
+        }
         }
     }
 }
@@ -210,11 +223,18 @@ require_once '../../includes/header.php';
         </div>
     </div>
 
-    <div style="display:flex;gap:.75rem;">
-        <button type="submit" class="btn btn-primary">
-            <i data-lucide="save" style="width:16px;height:16px;"></i> Save Changes
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div style="display:flex;gap:.75rem;">
+            <button type="submit" class="btn btn-primary">
+                <i data-lucide="save" style="width:16px;height:16px;"></i> Save Changes
+            </button>
+            <a href="item-view.php?id=<?= $itemId ?>" class="btn btn-secondary">Cancel</a>
+        </div>
+        <?php if ($authUser->hasPermission('inventory.delete')): ?>
+        <button type="button" class="btn btn-danger" onclick="var f=this.closest('form'); openGcrModal('Delete Item', 'Are you sure you want to permanently delete this inventory item? This will also remove its entire transaction history.', function() { var inp=document.createElement('input'); inp.type='hidden'; inp.name='action'; inp.value='delete'; f.appendChild(inp); f.submit(); }, { variant: 'danger', icon: 'trash-2', confirmLabel: 'Yes, Delete' });">
+            <i data-lucide="trash-2" style="width:16px;height:16px;"></i> Delete Item
         </button>
-        <a href="item-view.php?id=<?= $itemId ?>" class="btn btn-secondary">Cancel</a>
+        <?php endif; ?>
     </div>
 </form>
 
