@@ -127,10 +127,12 @@ class ComplianceRecord
                 COALESCE(SUM(CASE WHEN expiry_date < CURRENT_DATE() THEN 1 ELSE 0 END), 0) as expired,
                 COALESCE(SUM(CASE WHEN expiry_date >= CURRENT_DATE() AND expiry_date <= DATE_ADD(CURRENT_DATE(), INTERVAL 30 DAY) THEN 1 ELSE 0 END), 0) as expiring_soon
             FROM compliance_records c
-            WHERE status != 'renewed' AND status != 'cancelled'
-              AND expiry_date IS NOT NULL
-              AND expiry_date != '0000-00-00'
-              AND record_id = (
+            JOIN vehicles v ON c.vehicle_id = v.vehicle_id
+            WHERE c.status != 'renewed' AND c.status != 'cancelled'
+              AND c.expiry_date IS NOT NULL
+              AND c.expiry_date != '0000-00-00'
+              AND v.deleted_at IS NULL
+              AND c.record_id = (
                   SELECT MAX(record_id)
                   FROM compliance_records c2
                   WHERE c2.vehicle_id = c.vehicle_id AND c2.compliance_type = c.compliance_type
@@ -143,7 +145,7 @@ class ComplianceRecord
      */
     public function getAll($filters = [], $page = 1, $perPage = 25)
     {
-        $where = ["c.status NOT IN ('renewed', 'cancelled')"];
+        $where = ["c.status NOT IN ('renewed', 'cancelled')", "v.deleted_at IS NULL"];
         $params = [];
 
         // Subquery lock representing 'Latest unique entry'
@@ -230,7 +232,7 @@ class ComplianceRecord
 
         if (!empty($filters['search'])) {
             $search = '%' . $filters['search'] . '%';
-            $searchFilter = "WHERE (v.plate_number LIKE ? OR v.brand LIKE ? OR v.model LIKE ? OR c.document_number LIKE ?)";
+            $searchFilter = "AND (v.plate_number LIKE ? OR v.brand LIKE ? OR v.model LIKE ? OR c.document_number LIKE ?)";
             $params = [$search, $search, $search, $search];
         }
 
@@ -238,6 +240,7 @@ class ComplianceRecord
             SELECT c.*, v.plate_number, v.brand, v.model
             FROM compliance_records c
             JOIN vehicles v ON c.vehicle_id = v.vehicle_id
+            WHERE v.deleted_at IS NULL
             {$searchFilter}
             ORDER BY c.created_at DESC
             LIMIT 15

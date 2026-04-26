@@ -123,6 +123,7 @@ require_once '../../includes/header.php';
                     <label for="role">Role <span class="text-danger">*</span></label>
                     <select name="role" id="role" class="form-control" required>
                         <option value="viewer" <?= $targetUser['role'] === 'viewer' ? 'selected' : '' ?>>Viewer (Read Only)</option>
+                        <option value="qr_scanner" <?= $targetUser['role'] === 'qr_scanner' ? 'selected' : '' ?>>QR Scanner (Device)</option>
                         <option value="customer_service_staff" <?= $targetUser['role'] === 'customer_service_staff' ? 'selected' : '' ?>>Customer Service Staff</option>
                         <option value="mechanic" <?= $targetUser['role'] === 'mechanic' ? 'selected' : '' ?>>Mechanic</option>
                         <option value="maintenance_supervisor" <?= $targetUser['role'] === 'maintenance_supervisor' ? 'selected' : '' ?>>Maintenance Supervisor</option>
@@ -148,7 +149,7 @@ require_once '../../includes/header.php';
                             <i id="toggleEditIcon" data-lucide="eye" style="width:18px;height:18px;"></i>
                         </button>
                     </div>
-                    <small class="form-text text-muted">If set, the user will be forced to change it on their next login.</small>
+
                 </div>
             </div>
         </div>

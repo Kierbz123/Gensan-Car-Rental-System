@@ -28,7 +28,7 @@ if (!$rental) {
     redirect('modules/rentals/', 'Rental not found or not in dispatchable state', 'error');
 }
 
-$complianceRecords = $db->fetchAll("SELECT compliance_type, expiry_date FROM compliance_records WHERE vehicle_id = ? AND status NOT IN ('pending', 'cancelled') AND expiry_date IS NOT NULL", [$rental['vehicle_id']]);
+$complianceRecords = $db->fetchAll("SELECT compliance_type, expiry_date FROM compliance_records WHERE vehicle_id = ? AND status NOT IN ('pending', 'cancelled', 'renewed') AND expiry_date IS NOT NULL AND expiry_date != '0000-00-00'", [$rental['vehicle_id']]);
 $hasBreachedCompliance = false;
 $hasWarningCompliance = false;
 $breachDetails = [];

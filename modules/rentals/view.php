@@ -98,7 +98,7 @@ try {
 // ── Compliance Check ─────────────────────────────────────────────────────────
 $hasBreachedCompliance = false;
 $hasWarningCompliance  = false;
-$complianceRecords = $db->fetchAll("SELECT expiry_date FROM compliance_records WHERE vehicle_id = ? AND status NOT IN ('pending', 'cancelled') AND expiry_date IS NOT NULL", [$rental['vehicle_id']]);
+$complianceRecords = $db->fetchAll("SELECT expiry_date FROM compliance_records WHERE vehicle_id = ? AND status NOT IN ('pending', 'cancelled', 'renewed') AND expiry_date IS NOT NULL AND expiry_date != '0000-00-00'", [$rental['vehicle_id']]);
 foreach ($complianceRecords as $comp) {
     $expTime = strtotime($comp['expiry_date']);
     if ($expTime < time()) {

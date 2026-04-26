@@ -66,6 +66,8 @@ try {
          FROM compliance_records cr
          JOIN vehicles v ON cr.vehicle_id = v.vehicle_id
          WHERE cr.expiry_date < CURDATE()
+           AND cr.expiry_date != '0000-00-00'
+           AND v.deleted_at IS NULL
            AND cr.status NOT IN ('renewed','cancelled')
            AND cr.record_id = (
                SELECT MAX(r2.record_id)
@@ -116,7 +118,7 @@ try {
             'body'     => trim($r['brand'] . ' ' . $r['model']) . ' (' . $r['plate_number'] . ') — '
                         . str_replace('_', ' ', ucfirst($r['service_type']))
                         . ' is ' . $r['days_overdue'] . ' day(s) overdue.',
-            'href'     => BASE_URL . 'modules/maintenance/schedule.php',
+            'href'     => BASE_URL . 'modules/maintenance/service-view.php?id=' . $r['schedule_id'],
             'time'     => $r['next_due_date'],
         ];
     }
@@ -162,6 +164,8 @@ try {
          FROM compliance_records cr
          JOIN vehicles v ON cr.vehicle_id = v.vehicle_id
          WHERE cr.expiry_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)
+           AND cr.expiry_date != '0000-00-00'
+           AND v.deleted_at IS NULL
            AND cr.status NOT IN ('renewed','cancelled')
            AND cr.record_id = (
                SELECT MAX(r2.record_id)
@@ -210,7 +214,7 @@ try {
             'title'    => 'Vehicle Still in Maintenance',
             'body'     => $r['plate_number'] . ' (' . trim($r['brand'] . ' ' . $r['model']) . ') has been in '
                         . str_replace('_', ' ', $r['service_type']) . ' for ' . $r['days_in'] . ' days.',
-            'href'     => BASE_URL . 'modules/maintenance/schedule.php',
+            'href'     => BASE_URL . 'modules/maintenance/index.php?status=in_progress',
             'time'     => $r['service_date'],
         ];
     }
@@ -229,6 +233,8 @@ try {
          JOIN vehicles v ON cr.vehicle_id = v.vehicle_id
          WHERE cr.expiry_date BETWEEN DATE_ADD(CURDATE(), INTERVAL 8 DAY)
                                   AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)
+           AND cr.expiry_date != '0000-00-00'
+           AND v.deleted_at IS NULL
            AND cr.status NOT IN ('renewed','cancelled')
            AND cr.record_id = (
                SELECT MAX(r2.record_id)
@@ -255,29 +261,31 @@ try {
         ];
     }
 
-    /* 2b. Scheduled maintenance coming up (not yet overdue) */
+    /* 2b. Pending Maintenance (All scheduled/pending items not overdue) */
     $maintScheduled = $db->fetchAll(
         "SELECT ms.schedule_id, v.plate_number, v.brand, v.model,
                 ms.service_type, ms.next_due_date,
                 DATEDIFF(ms.next_due_date, CURDATE()) AS days_until
          FROM maintenance_schedules ms
          JOIN vehicles v ON ms.vehicle_id = v.vehicle_id
-         WHERE ms.status = 'scheduled'
-           AND ms.next_due_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)
+         WHERE ms.status != 'completed' AND ms.status != 'overdue'
          ORDER BY ms.next_due_date ASC
-         LIMIT 5"
+         LIMIT 20"
     );
     foreach ($maintScheduled as $r) {
+        $daysUntil = $r['days_until'] ?? 0;
+        $timeText = ($daysUntil > 0) ? "due in {$daysUntil} day(s)" : "due now";
+        
         $items[] = [
             'id'       => 'maint-sched-' . $r['schedule_id'],
             'type'     => 'maintenance',
             'priority' => 2,
             'severity' => 'info',
-            'icon'     => 'calendar-clock',
-            'title'    => 'Maintenance Due Soon',
+            'icon'     => 'wrench',
+            'title'    => 'Pending Maintenance',
             'body'     => trim($r['brand'] . ' ' . $r['model']) . ' (' . $r['plate_number'] . ') — '
                         . str_replace('_', ' ', ucfirst($r['service_type']))
-                        . ' due in ' . $r['days_until'] . ' day(s).',
+                        . ' is ' . $timeText . '.',
             'href'     => BASE_URL . 'modules/maintenance/service-view.php?id=' . $r['schedule_id'],
             'time'     => $r['next_due_date'],
         ];

@@ -40,6 +40,7 @@ try {
         $db->beginTransaction();
         try {
             $db->execute("UPDATE maintenance_schedules SET status = 'completed', last_service_date = CURDATE() WHERE schedule_id = ?", [$scheduleId]);
+            $db->execute("UPDATE maintenance_logs SET status = 'completed', completion_date = CURDATE() WHERE schedule_id = ? AND status = 'in_progress'", [$scheduleId]);
             $db->execute("UPDATE vehicles SET current_status = 'available' WHERE vehicle_id = ? AND current_status = 'maintenance'", [$schedule['vehicle_id']]);
             $db->commit();
             

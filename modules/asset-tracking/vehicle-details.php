@@ -85,8 +85,9 @@ $maintenanceHistory = $db->fetchAll("
 $complianceRecords = $db->fetchAll("
     SELECT * FROM compliance_records 
     WHERE vehicle_id = ?
-      AND status NOT IN ('pending', 'cancelled')
+      AND status NOT IN ('pending', 'cancelled', 'renewed')
       AND expiry_date IS NOT NULL
+      AND expiry_date != '0000-00-00'
     ORDER BY expiry_date ASC",
     [$vehicleId]
 );
@@ -257,17 +258,41 @@ $rentalHistory = $db->fetchAll("
                 }
             }
             ?>
-            <div style="display: flex; flex-direction: column; gap: var(--space-3);">
-                <?php if ($vehicleData['current_status'] === 'available' && !$hasBreachedCompliance): ?>
-                    <a href="../rentals/reserve.php?vehicle_id=<?php echo urlencode($vehicleId); ?>" class="btn btn-primary"
-                        style="justify-content: center;">
-                        <i data-lucide="key" class="w-4 h-4"></i> Deploy Asset
-                    </a>
-                <?php elseif ($vehicleData['current_status'] === 'available' && $hasBreachedCompliance): ?>
-                    <div class="btn" title="Cannot deploy — compliance breach detected. Renew expired documents first."
-                        style="justify-content: center; background: var(--danger-light, #fee2e2); color: var(--danger); border: 1px solid var(--danger); cursor: not-allowed;">
-                        <i data-lucide="shield-off" class="w-4 h-4"></i> Deploy Blocked
+            <?php if ($hasBreachedCompliance): ?>
+                <?php
+                $breachDetails = [];
+                foreach ($complianceRecords as $comp) {
+                    $expTime = strtotime($comp['expiry_date']);
+                    if ($expTime < time()) {
+                        $breachDetails[] = str_replace('_', ' ', $comp['compliance_type']) . ' expired on ' . date('M d, Y', $expTime);
+                    } elseif ($expTime < (time() + (30 * 86400))) {
+                        $breachDetails[] = str_replace('_', ' ', $comp['compliance_type']) . ' expires on ' . date('M d, Y', $expTime);
+                    }
+                }
+                ?>
+                <div style="background: var(--danger-50, #fef2f2); border: 1px solid var(--danger-200, #fecaca); border-radius: var(--radius-md); padding: var(--space-3); font-size: 0.8rem;">
+                    <div style="display: flex; align-items: center; gap: 6px; font-weight: 800; color: var(--danger); margin-bottom: var(--space-2);">
+                        <i data-lucide="shield-alert" style="width: 15px; height: 15px; flex-shrink: 0;"></i>
+                        Compliance Breach Detected
                     </div>
+                    <div style="color: var(--danger-700, #b91c1c); font-size: 0.75rem;">
+                        Acknowledge before dispatching:
+                        <ul style="margin: var(--space-1) 0 0 var(--space-4); padding: 0; list-style: disc; font-weight: 600;">
+                            <?php foreach ($breachDetails as $detail): ?>
+                                <li><?= htmlspecialchars($detail) ?></li>
+                            <?php endforeach; ?>
+                        </ul>
+                    </div>
+                </div>
+            <?php endif; ?>
+
+            <div style="display: flex; flex-direction: column; gap: var(--space-3);">
+                <?php if ($vehicleData['current_status'] === 'available'): ?>
+                    <a href="../rentals/reserve.php?vehicle_id=<?php echo urlencode($vehicleId); ?>"
+                        class="btn <?= $hasBreachedCompliance ? '' : 'btn-primary' ?>"
+                        style="justify-content: center;<?= $hasBreachedCompliance ? ' background: var(--warning-100, #fef9c3); color: var(--warning-800, #854d0e); border: 1px solid var(--warning-400, #facc15);' : '' ?>">
+                        <i data-lucide="key" class="w-4 h-4"></i> Deploy Asset<?= $hasBreachedCompliance ? ' ⚠' : '' ?>
+                    </a>
                 <?php endif; ?>
                 <?php if ($authUser->hasPermission('vehicles.update')): ?>
                     <a href="vehicle-edit.php?id=<?php echo urlencode($vehicleId); ?>" class="btn btn-secondary"

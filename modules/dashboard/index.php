@@ -439,9 +439,6 @@ $ajaxBase = rtrim(BASE_URL, '/') . '/modules/dashboard/dashboard-ajax.php';
     </div>
     <div class="page-actions" style="align-items:center;gap:.75rem;">
         <?php require_once '../../includes/notifications.php'; ?>
-        <a href="dashboard-snapshot.php" class="btn btn-secondary" style="gap:.4rem;" target="_blank">
-            <i data-lucide="file-text" style="width:15px;height:15px;"></i> Snapshot
-        </a>
         <?php if ($authUser->hasPermission('rentals.create')): ?>
         <a href="<?= BASE_URL ?>modules/rentals/reserve.php" class="btn btn-primary">
             <i data-lucide="plus" style="width:15px;height:15px;"></i> New Booking

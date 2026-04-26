@@ -122,6 +122,22 @@ if ($d['status'] === 'suspended') $statusColor = 'var(--danger)';
                 </div>
             </div>
 
+            <!-- Administrative Notes -->
+            <div class="card">
+                <div class="card-body">
+                    <label style="display: block; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 0.75rem;">Administrative Notes</label>
+                    <?php if (!empty($d['notes'])): ?>
+                        <div style="width: 100%; padding: 1rem; background: var(--secondary-50); border-radius: var(--radius-md); border: 1px solid var(--border-color); border-left: 3px solid var(--primary-300); white-space: pre-wrap; line-height: 1.6; color: var(--text-main); font-size: 0.875rem;">
+                            <?= htmlspecialchars($d['notes']) ?>
+                        </div>
+                    <?php else: ?>
+                        <div style="width: 100%; padding: 1.5rem 1rem; background: var(--bg-muted); border-radius: var(--radius-md); border: 1px dashed var(--border-color); text-align: center; color: var(--text-muted); font-size: 0.875rem; font-style: italic;">
+                            No administrative notes recorded.
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+
             <!-- Action Buttons Stack -->
             <div style="display: flex; flex-direction: column; gap: var(--space-3);">
                 <?php if ($authUser->hasPermission('drivers.update')): ?>
@@ -191,20 +207,33 @@ if ($d['status'] === 'suspended') $statusColor = 'var(--danger)';
                         <i data-lucide="id-card" style="width:18px;height:18px;color:var(--primary);"></i> Licensing Credentials
                     </h2>
                     
-                    <div style="background: <?= $licBgStatus ?>; border: 1px solid <?= $licBorderStatus ?>; border-radius: var(--radius-md); padding: var(--space-4); margin-bottom: var(--space-4); display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <div style="font-weight: bold; font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-main); margin-bottom: 4px;">
-                                LTO License Expiry
+                    <div style="background: <?= $licBgStatus ?>; border: 1px solid <?= $licBorderStatus ?>; border-radius: var(--radius-md); padding: 1.25rem; margin-bottom: var(--space-4); position: relative; overflow: hidden;">
+                        <div class="grid" style="grid-template-columns: 1fr 1fr; gap: var(--space-4);">
+                            <div>
+                                <div style="font-weight: 800; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 0.5rem;">
+                                    LTO License Expiry
+                                </div>
+                                <div style="font-weight: 900; font-size: 1.5rem; color: var(--text-main); line-height: 1;">
+                                    <?= date('M d, Y', strtotime($d['license_expiry'])) ?>
+                                </div>
+                                <div style="font-size: 0.85rem; color: <?= $licTextStatus ?>; margin-top: 8px; font-weight: 600;">
+                                    <?= $daysLeft > 0 ? $daysLeft . ' days remaining' : ($daysLeft === 0 ? 'Expires today' : abs($daysLeft) . ' days ago') ?>
+                                </div>
                             </div>
-                            <div style="font-weight: 800; font-size: 1.1em; color: var(--text-secondary);">
-                                <?= date('M d, Y', strtotime($d['license_expiry'])) ?>
+                            <div>
+                                <div style="font-weight: 800; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 0.5rem;">
+                                    Status
+                                </div>
+                                <div style="font-weight: 800; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: <?= $licTextStatus ?>; padding: 4px 10px; background: white; border-radius: var(--radius-full); border: 1px solid <?= $licBorderStatus ?>; box-shadow: 0 2px 4px rgba(0,0,0,0.02); display: inline-flex; align-items: center; gap: 4px;">
+                                    <?php if ($isExpired): ?>
+                                        <i data-lucide="x-circle" style="width: 14px; height: 14px;"></i> EXPIRED
+                                    <?php elseif ($isWarning): ?>
+                                        <i data-lucide="alert-triangle" style="width: 14px; height: 14px;"></i> EXPIRING SOON
+                                    <?php else: ?>
+                                        <i data-lucide="check-circle" style="width: 14px; height: 14px;"></i> VALID
+                                    <?php endif; ?>
+                                </div>
                             </div>
-                            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">
-                                (<?= $daysLeft > 0 ? $daysLeft . ' days remaining' : ($daysLeft === 0 ? 'Expires today' : abs($daysLeft) . ' days ago') ?>)
-                            </div>
-                        </div>
-                        <div style="font-weight: bold; font-size: 0.75em; text-transform: uppercase; color: <?= $licTextStatus ?>; padding: 6px 12px; background: white; border-radius: 4px; border: 1px solid <?= $licBorderStatus ?>;">
-                            <?= $isExpired ? 'EXPIRED' : ($isWarning ? 'EXPIRING SOON' : 'VALID') ?>
                         </div>
                     </div>
 
@@ -287,20 +316,6 @@ if ($d['status'] === 'suspended') $statusColor = 'var(--danger)';
                     </table>
                 </div>
             </div><!-- /card -->
-
-            <!-- Administrative Notes -->
-            <?php if (!empty($d['notes'])): ?>
-                <div class="card" style="margin-bottom: var(--space-6);">
-                    <div class="card-body">
-                        <h2 style="margin-bottom: var(--space-4); margin-top: 0; font-size: 1rem; display: flex; align-items: center; gap: 8px; color: var(--text-muted); text-transform:uppercase; letter-spacing:0.05em;">
-                            <i data-lucide="info" style="width:16px;height:16px;"></i> Administrative Notes
-                        </h2>
-                        <div style="font-size: 0.875rem; line-height: 1.5; color: var(--text-main); background:var(--secondary-50); padding:var(--space-4); border-radius:var(--radius-md); border-left:3px solid var(--primary-300);">
-                            <?= nl2br(htmlspecialchars($d['notes'])) ?>
-                        </div>
-                    </div>
-                </div>
-            <?php endif; ?>
 
         </div>
     </div>

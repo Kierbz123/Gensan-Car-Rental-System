@@ -382,15 +382,34 @@ class User
             }
         }
 
-        // Check uniqueness
-        $exists = $this->db->fetchOne(
-            "SELECT user_id FROM users 
-             WHERE username = ? OR email = ? OR employee_id = ?",
-            [$data['username'], $data['email'], $data['employee_id']]
+        // Check uniqueness against ALL rows (including soft-deleted) because
+        // the DB UNIQUE constraints on username, email, and employee_id cover
+        // every row regardless of deleted_at status.
+        $dupUsername = $this->db->fetchOne(
+            "SELECT user_id, deleted_at FROM users WHERE username = ?",
+            [$data['username']]
         );
+        if ($dupUsername) {
+            $hint = $dupUsername['deleted_at'] ? ' (previously used by a deleted account — choose a different username)' : '';
+            throw new Exception("Username '" . htmlspecialchars($data['username']) . "' is already taken{$hint}.");
+        }
 
-        if ($exists) {
-            throw new Exception("Username, email, or employee ID already exists.");
+        $dupEmail = $this->db->fetchOne(
+            "SELECT user_id, deleted_at FROM users WHERE email = ?",
+            [$data['email']]
+        );
+        if ($dupEmail) {
+            $hint = $dupEmail['deleted_at'] ? ' (previously used by a deleted account — use a different email)' : '';
+            throw new Exception("Email address '" . htmlspecialchars($data['email']) . "' is already registered{$hint}.");
+        }
+
+        $dupEmpId = $this->db->fetchOne(
+            "SELECT user_id, deleted_at FROM users WHERE employee_id = ?",
+            [$data['employee_id']]
+        );
+        if ($dupEmpId) {
+            $hint = $dupEmpId['deleted_at'] ? ' (previously used by a deleted account — generate a new ID)' : '';
+            throw new Exception("Employee ID '" . htmlspecialchars($data['employee_id']) . "' is already in use{$hint}.");
         }
 
         // Hash password

@@ -151,7 +151,46 @@ class ProcurementRequest
     }
 
     /**
-     * Process approval or rejection
+     * Returns a cached set of columns that exist on procurement_requests.
+     * Used to build safe UPDATE statements regardless of schema state.
+     */
+    private function _prColumns(): array
+    {
+        static $cols = null;
+        if ($cols === null) {
+            $rows = $this->db->fetchAll("SHOW COLUMNS FROM procurement_requests");
+            $cols = array_column($rows, 'Field');
+        }
+        return $cols;
+    }
+
+    /**
+     * Build a SET clause snippet and matching params array only for columns
+     * that actually exist in the table.
+     *
+     * @param array $candidates  [ 'col_name' => $value ]  — use null for NOW()
+     * @param array $nowCols     columns that should use NOW() instead of a param
+     * @return array [ 'sets' => ['col=?', ...], 'params' => [...] ]
+     */
+    private function _safeSets(array $candidates, array $nowCols = []): array
+    {
+        $existing = $this->_prColumns();
+        $sets   = [];
+        $params = [];
+        foreach ($candidates as $col => $val) {
+            if (!in_array($col, $existing)) continue;
+            if (in_array($col, $nowCols)) {
+                $sets[] = "{$col} = NOW()";
+            } else {
+                $sets[]   = "{$col} = ?";
+                $params[] = $val;
+            }
+        }
+        return ['sets' => $sets, 'params' => $params];
+    }
+
+    /**
+     * Process approval or rejection — fully schema-safe.
      */
     public function processApproval($prId, $approverId, $action, $notes = null)
     {
@@ -166,47 +205,108 @@ class ProcurementRequest
 
         $currentLevel = (int) $pr['current_approval_level'];
 
-        // Verify approver has authority for this current level
         if (!$this->canApprove($approverId, $currentLevel, $pr['total_estimated_cost'])) {
             throw new Exception("You do not have approval authority for this level.");
         }
 
+        // ── REJECT ────────────────────────────────────────────────────────────
         if ($action === 'reject') {
-            $this->db->query("CALL ProcessPRApproval(?, ?, ?, ?, ?, @res)", [$prId, $approverId, $currentLevel, $notes, $action]);
+            $this->db->beginTransaction();
+            try {
+                $built = $this->_safeSets(
+                    ['rejected_by' => $approverId, 'rejected_at' => null, 'rejection_reason' => $notes],
+                    ['rejected_at']
+                );
+                $setClauses = array_merge(["status = 'rejected'"], $built['sets']);
+                $params     = array_merge($built['params'], [$prId]);
+                $this->db->execute(
+                    "UPDATE procurement_requests SET " . implode(', ', $setClauses) . " WHERE pr_id = ?",
+                    $params
+                );
+                $this->db->commit();
+            } catch (Exception $e) {
+                $this->db->rollback();
+                throw $e;
+            }
             $this->notifyRequestor($prId, 'rejected', $notes);
             return true;
         }
 
-        // Keep attempting approval for subsequent levels if the user has permission to do so.
-        do {
-            $this->db->query("CALL ProcessPRApproval(?, ?, ?, ?, ?, @res)", [$prId, $approverId, $currentLevel, $notes, $action]);
+        // ── APPROVE ───────────────────────────────────────────────────────────
+        $this->db->beginTransaction();
+        try {
+            do {
+                // Stamp per-level approval columns (only if they exist)
+                $levelByCol = "approved_by_level{$currentLevel}";
+                $levelAtCol = "approved_at_level{$currentLevel}";
+                $built = $this->_safeSets(
+                    [$levelByCol => $approverId, $levelAtCol => null],
+                    [$levelAtCol]
+                );
+                if (!empty($built['sets'])) {
+                    $this->db->execute(
+                        "UPDATE procurement_requests SET " . implode(', ', $built['sets']) . " WHERE pr_id = ?",
+                        array_merge($built['params'], [$prId])
+                    );
+                }
 
-            $updatedPr = $this->db->fetchOne(
-                "SELECT status, current_approval_level, total_estimated_cost FROM procurement_requests WHERE pr_id = ?",
-                [$prId]
-            );
+                // Determine if a next level exists in workflow JSON
+                $workflow     = json_decode($pr['approval_workflow'] ?? '{}', true);
+                $nextLevel    = $currentLevel + 1;
+                $hasNextLevel = isset($workflow['levels'][$nextLevel]);
 
-            if ($updatedPr['status'] !== PR_STATUS_PENDING) {
-                break; // Fully approved or rejected
-            }
+                if (!$hasNextLevel) {
+                    // All levels satisfied — mark fully approved
+                    $built = $this->_safeSets(
+                        ['approved_at' => null, 'current_approval_level' => $currentLevel],
+                        ['approved_at']
+                    );
+                    $setClauses = array_merge(["status = ?"], $built['sets']);
+                    $params     = array_merge([PR_STATUS_APPROVED], $built['params'], [$prId]);
+                    $this->db->execute(
+                        "UPDATE procurement_requests SET " . implode(', ', $setClauses) . " WHERE pr_id = ?",
+                        $params
+                    );
+                    break;
+                }
 
-            $currentLevel = (int) $updatedPr['current_approval_level'];
+                // Advance to next level
+                $this->db->execute(
+                    "UPDATE procurement_requests SET current_approval_level = ? WHERE pr_id = ?",
+                    [$nextLevel, $prId]
+                );
+                $currentLevel = $nextLevel;
 
-            // Check if user is authorized to auto-approve the NEXT level too (e.g. they are System Admin or have higher limit)
-            if (!$this->canApprove($approverId, $currentLevel, $updatedPr['total_estimated_cost'])) {
-                break; // They can't approve further. It stays pending for the next assigned role.
-            }
-        } while (true);
+                $updatedPr = $this->db->fetchOne(
+                    "SELECT status, current_approval_level, total_estimated_cost FROM procurement_requests WHERE pr_id = ?",
+                    [$prId]
+                );
 
-        // Fetch final status
-        $finalPr = $this->db->fetchOne("SELECT status, current_approval_level FROM procurement_requests WHERE pr_id = ?", [$prId]);
+                if ($updatedPr['status'] !== PR_STATUS_PENDING) {
+                    break;
+                }
 
-        // If fully approved, notify
+                if (!$this->canApprove($approverId, $currentLevel, $updatedPr['total_estimated_cost'])) {
+                    break;
+                }
+            } while (true);
+
+            $this->db->commit();
+        } catch (Exception $e) {
+            $this->db->rollback();
+            throw $e;
+        }
+
+        // Notify based on final status
+        $finalPr = $this->db->fetchOne(
+            "SELECT status, current_approval_level FROM procurement_requests WHERE pr_id = ?",
+            [$prId]
+        );
+
         if ($finalPr['status'] === PR_STATUS_APPROVED) {
             $this->notifyProcurementOfficers($prId, 'approved');
             $this->notifyRequestor($prId, 'approved', $notes);
         } else {
-            // Notify next level approvers
             $this->notifyApprovers($prId, $finalPr['current_approval_level']);
         }
 

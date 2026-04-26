@@ -39,14 +39,6 @@ class Customer
             throw new Exception("Primary phone number is too long (max 20 characters).");
         }
 
-        // Prevent Duplicate Identity (Phone/Email)
-        $existing = $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM customers WHERE phone_primary = ? AND deleted_at IS NULL",
-            [$data['phone_primary']]
-        );
-        if ($existing > 0) {
-            throw new Exception("Conflict: A customer profile with this primary phone number already exists.");
-        }
 
         // Generate customer code
         $customerCode = $this->generateCustomerCode();
@@ -164,14 +156,6 @@ class Customer
             throw new Exception("Invalid email address format.");
         }
 
-        // Prevent Duplicate Identity Assignment (Phone/Email)
-        $existing = $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM customers WHERE phone_primary = ? AND customer_id != ? AND deleted_at IS NULL",
-            [$data['phone_primary'], $customerId]
-        );
-        if ($existing > 0) {
-            throw new Exception("Conflict: A different customer profile with this primary phone already exists.");
-        }
 
         $updates = [
             "customer_type = ?",
@@ -672,7 +656,7 @@ class Customer
         $sortOrder = 'DESC';
 
         if (!empty($filters['sort_by'])) {
-            $allowedSorts = ['first_name', 'phone_primary', 'id_type', 'customer_type', 'is_blacklisted'];
+            $allowedSorts = ['first_name', 'phone_primary', 'id_type', 'customer_type', 'is_blacklisted', 'created_at'];
             if (in_array($filters['sort_by'], $allowedSorts)) {
                 $sortBy = $filters['sort_by'];
             }

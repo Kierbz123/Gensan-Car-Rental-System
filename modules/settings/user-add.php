@@ -206,11 +206,7 @@ require_once '../../includes/header.php';
                 </div>
             </div>
 
-            <div class="form-group" style="margin-top: var(--space-6);">
-                <label class="form-checkbox-label">
-                    <input type="checkbox" name="must_change" <?= (!isset($_POST['csrf_token']) || isset($_POST['must_change'])) ? 'checked' : '' ?>> Force password change on first login
-                </label>
-            </div>
+
         </div>
 
         <div class="card-footer-actions">

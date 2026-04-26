@@ -63,387 +63,438 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $pageTitle = 'Edit — ' . $customer['first_name'] . ' ' . $customer['last_name'];
 require_once '../../includes/header.php';
 ?>
-<div class="fade-in max-w-7xl mx-auto">
-    <div class="flex items-center gap-3 mb-8 text-[10px] font-black uppercase tracking-widest flex-wrap">
-        <a href="index.php"
-            class="text-secondary-400 hover:text-primary-600 transition-colors whitespace-nowrap">Customers</a>
-        <span class="text-secondary-200">/</span>
-        <a href="customer-view.php?id=<?= $customerId ?>"
-            class="text-secondary-400 hover:text-primary-600 transition-colors break-words"><?= htmlspecialchars($customer['first_name'] . ' ' . $customer['last_name']) ?></a>
-        <span class="text-secondary-200">/</span>
-        <span class="text-primary-600">Edit</span>
+
+<div class="page-header">
+    <div class="page-title">
+        <h1><i data-lucide="user"
+                style="width:24px;height:24px;vertical-align:-4px;margin-right:8px;color:var(--primary)"></i>Edit Customer
+        </h1>
+        <p>Update identity profile for <strong style="color:var(--text-main);"><?= htmlspecialchars($customer['first_name'] . ' ' . $customer['last_name']) ?></strong> (<?= htmlspecialchars($customer['customer_code'] ?? '') ?>).</p>
+    </div>
+    <div class="page-actions">
+        <a href="customer-view.php?id=<?= $customerId ?>" class="btn btn-secondary">
+            <i data-lucide="arrow-left" style="width:16px;height:16px;"></i> Back to Profile
+        </a>
+    </div>
+</div>
+
+<?php if (!empty($errors)): ?>
+    <div
+        style="margin-bottom:1.5rem;padding:1rem;background:var(--danger-light);color:var(--danger);border-radius:var(--radius-md);font-weight:500;display:flex;align-items:center;gap:.5rem;">
+        <i data-lucide="alert-circle" style="width:18px;height:18px;flex-shrink:0;"></i>
+        <ul style="margin:0;padding-left:1.5rem;font-size:0.9rem;">
+            <?php foreach ($errors as $e): ?>
+                <li><?= htmlspecialchars($e) ?></li>
+            <?php endforeach; ?>
+        </ul>
+    </div>
+<?php endif; ?>
+
+<form method="POST" enctype="multipart/form-data" class="needs-validation" novalidate>
+    <?= csrfField() ?>
+    
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+        
+        <!-- Column 1: Personal, Contact, Emergency -->
+        <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+            
+            <!-- Personal Info -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title"><i data-lucide="user"
+                            style="width:18px;height:18px;margin-right:8px;vertical-align:-3px;color:var(--primary)"></i>Personal
+                        Information</h2>
+                </div>
+                <div class="card-body" style="display: flex; flex-direction: column; gap: 1.25rem;">
+                    <div class="form-row">
+                        <div class="form-group" style="margin: 0;">
+                            <label for="first_name">First Name <span style="color:var(--danger)">*</span></label>
+                            <input type="text" id="first_name" name="first_name" class="form-control" required
+                                value="<?= htmlspecialchars($data['first_name'] ?? '') ?>">
+                        </div>
+                        <div class="form-group" style="margin: 0;">
+                            <label for="last_name">Last Name <span style="color:var(--danger)">*</span></label>
+                            <input type="text" id="last_name" name="last_name" class="form-control" required
+                                value="<?= htmlspecialchars($data['last_name'] ?? '') ?>">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group" style="margin: 0;">
+                        <label for="middle_name">Middle Name</label>
+                        <input type="text" id="middle_name" name="middle_name" class="form-control"
+                            value="<?= htmlspecialchars($data['middle_name'] ?? '') ?>">
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group" style="margin: 0;">
+                            <label for="date_of_birth">Date of Birth</label>
+                            <input type="date" id="date_of_birth" name="date_of_birth" class="form-control"
+                                value="<?= htmlspecialchars($data['date_of_birth'] ?? '') ?>">
+                        </div>
+                        <div class="form-group" style="margin: 0;">
+                            <label for="gender">Gender</label>
+                            <select id="gender" name="gender" class="form-control">
+                                <option value="">— Select —</option>
+                                <?php foreach (['male' => 'Male', 'female' => 'Female', 'other' => 'Other', 'prefer_not_to_say' => 'Prefer not to say'] as $v => $l): ?>
+                                    <option value="<?= $v ?>" <?= ($data['gender'] ?? '') === $v ? 'selected' : '' ?>>
+                                        <?= $l ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group" style="margin: 0;">
+                            <label for="customer_type">Customer Type <span style="color:var(--danger)">*</span></label>
+                            <select id="customer_type" name="customer_type" class="form-control" required>
+                                <?php foreach (['walk_in' => 'Walk-in', 'online' => 'Online', 'corporate' => 'Corporate', 'repeat' => 'Repeat', 'referral' => 'Referral'] as $v => $l): ?>
+                                    <option value="<?= $v ?>" <?= ($data['customer_type'] ?? '') === $v ? 'selected' : '' ?>>
+                                        <?= $l ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin: 0;">
+                            <label for="is_blacklisted">Account Standing</label>
+                            <select id="is_blacklisted" name="is_blacklisted" class="form-control">
+                                <option value="0" <?= empty($data['is_blacklisted']) ? 'selected' : '' ?>>Good Standing</option>
+                                <option value="1" <?= !empty($data['is_blacklisted']) ? 'selected' : '' ?>>Blacklisted</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Profile Photo Upload -->
+                    <div style="padding-top: 0.5rem; border-top: 1px dashed var(--border-color); margin-top: 0.5rem;">
+                        <label style="display:block;font-size:0.8125rem;font-weight:600;color:var(--text-secondary);margin-bottom:0.75rem;">Update Profile Picture</label>
+                        <div style="display:flex;align-items:center;gap:1.25rem;flex-wrap:wrap;">
+                            <!-- Live preview avatar -->
+                            <div id="customerPhotoPreview"
+                                style="width:72px;height:72px;border-radius:50%;background:var(--primary-100);color:var(--primary-600);display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;border:1px solid var(--border-color);"
+                                title="Photo preview">
+                                <?php if (!empty($customer['profile_picture_path'])): ?>
+                                    <img src="<?= BASE_URL . ltrim($customer['profile_picture_path'], '/') ?>" style="width:100%;height:100%;object-fit:cover;">
+                                <?php else: ?>
+                                    <span style="font-size:1.5rem;font-weight:bold;"><?= strtoupper(substr($data['first_name'] ?? '', 0, 1) . substr($data['last_name'] ?? '', 0, 1)) ?></span>
+                                <?php endif; ?>
+                            </div>
+                            <div style="flex:1;display:flex;flex-direction:column;gap:0.5rem;min-width:260px;">
+                                <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+                                    <div style="flex:1;min-width:200px;">
+                                        <input type="file" id="profile_picture" name="profile_picture" accept="image/*"
+                                            class="form-control" style="padding:0.4rem 0.5rem; font-size: 0.85rem;"
+                                            onchange="previewCustomerPhoto(this)">
+                                    </div>
+                                    <button type="button" onclick="openCamera('profile_picture', 'Take Profile Picture')"
+                                        class="btn btn-secondary" style="padding:0.4rem 0.85rem;font-size:0.85rem;display:flex;align-items:center;gap:6px;flex-shrink:0;" title="Use Camera">
+                                        <i data-lucide="camera" style="width:16px;height:16px;"></i>
+                                        <span>Camera</span>
+                                    </button>
+                                </div>
+                                <div style="font-size:0.75rem;color:var(--text-muted);display:flex;align-items:center;gap:4px;">
+                                    <i data-lucide="info" style="width:12px;height:12px;"></i> JPG, PNG, WebP — max 5 MB
+                                </div>
+                                
+                                <div id="cam_container_profile_picture" style="display:none; padding:0; border:none; box-shadow:none; background:transparent; align-items:flex-start; margin-top:0.25rem; width:100%;">
+                                    <img id="cam_thumb_profile_picture" style="display:none;" alt="cam">
+                                    <div class="cam-success-badge" style="width:100%; margin-top:0;">
+                                        <div class="cam-success-badge-title">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                                <path d="M20 6 9 17l-5-5"></path>
+                                            </svg>
+                                            Photo Captured
+                                        </div>
+                                        <div class="cam-success-badge-text">Save changes to confirm upload.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Contact Information -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title"><i data-lucide="phone"
+                            style="width:18px;height:18px;margin-right:8px;vertical-align:-3px;color:var(--success)"></i>Contact
+                        Information</h2>
+                </div>
+                <div class="card-body" style="display: flex; flex-direction: column; gap: 1.25rem;">
+                    <div class="form-row">
+                        <div class="form-group" style="margin: 0;">
+                            <label for="phone_primary">Primary Phone <span style="color:var(--danger)">*</span></label>
+                            <input type="text" id="phone_primary" name="phone_primary" class="form-control" required
+                                value="<?= htmlspecialchars($data['phone_primary'] ?? '') ?>">
+                        </div>
+                        <div class="form-group" style="margin: 0;">
+                            <label for="phone_secondary">Secondary Phone</label>
+                            <input type="text" id="phone_secondary" name="phone_secondary" class="form-control"
+                                value="<?= htmlspecialchars($data['phone_secondary'] ?? '') ?>">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group" style="margin: 0;">
+                        <label for="email">Email Address</label>
+                        <input type="email" id="email" name="email" class="form-control"
+                            value="<?= htmlspecialchars($data['email'] ?? '') ?>">
+                    </div>
+
+                    <div class="form-group" style="margin: 0;">
+                        <label for="address">Address</label>
+                        <textarea id="address" name="address" rows="2" class="form-control" style="resize: none;"><?= htmlspecialchars($data['address'] ?? '') ?></textarea>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group" style="margin: 0;">
+                            <label for="city">City</label>
+                            <input type="text" id="city" name="city" class="form-control"
+                                value="<?= htmlspecialchars($data['city'] ?? '') ?>">
+                        </div>
+                        <div class="form-group" style="margin: 0;">
+                            <label for="province">Province</label>
+                            <input type="text" id="province" name="province" class="form-control"
+                                value="<?= htmlspecialchars($data['province'] ?? '') ?>">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Emergency Contact -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title"><i data-lucide="heart-pulse"
+                            style="width:18px;height:18px;margin-right:8px;vertical-align:-3px;color:var(--danger)"></i>Emergency
+                        Contact</h2>
+                </div>
+                <div class="card-body" style="display: flex; flex-direction: column; gap: 1.25rem;">
+                    <div class="form-group" style="margin: 0;">
+                        <label for="emergency_name">Full Name</label>
+                        <input type="text" id="emergency_name" name="emergency_name" class="form-control"
+                            value="<?= htmlspecialchars($data['emergency_name'] ?? '') ?>">
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group" style="margin: 0;">
+                            <label for="emergency_phone">Phone</label>
+                            <input type="text" id="emergency_phone" name="emergency_phone" class="form-control"
+                                value="<?= htmlspecialchars($data['emergency_phone'] ?? '') ?>">
+                        </div>
+                        <div class="form-group" style="margin: 0;">
+                            <label for="emergency_relationship">Relationship</label>
+                            <input type="text" id="emergency_relationship" name="emergency_relationship" class="form-control"
+                                value="<?= htmlspecialchars($data['emergency_relationship'] ?? '') ?>">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+
+        <!-- Column 2: ID Verification, Notes -->
+        <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+            
+            <!-- ID Verification -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title"><i data-lucide="shield-check"
+                            style="width:18px;height:18px;margin-right:8px;vertical-align:-3px;color:var(--warning)"></i>ID
+                        Verification (Optional Update)</h2>
+                </div>
+                <div class="card-body" style="display: flex; flex-direction: column; gap: 1.25rem;">
+                    <div class="form-row">
+                        <div class="form-group" style="margin: 0;">
+                            <label for="id_type">ID Type <span style="color:var(--danger)">*</span></label>
+                            <select id="id_type" name="id_type" class="form-control" required>
+                                <?php foreach (['drivers_license' => "Driver's License", 'passport' => 'Passport', 'national_id' => 'National ID', 'company_id' => 'Company ID'] as $v => $l): ?>
+                                    <option value="<?= $v ?>" <?= ($data['id_type'] ?? '') === $v ? 'selected' : '' ?>>
+                                        <?= $l ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin: 0;">
+                            <label for="id_number">ID Number</label>
+                            <input type="text" id="id_number" name="id_number" class="form-control"
+                                value="<?= htmlspecialchars($data['id_number'] ?? '') ?>">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group" style="margin: 0;">
+                        <label for="id_expiry_date">ID Expiry</label>
+                        <input type="date" id="id_expiry_date" name="id_expiry_date" class="form-control"
+                            value="<?= htmlspecialchars($data['id_expiry_date'] ?? '') ?>">
+                    </div>
+
+                    <!-- ID Front Photo Upload -->
+                    <div style="padding-top: 0.5rem; border-top: 1px dashed var(--border-color); margin-top: 0.5rem;">
+                        <label style="display:block;font-size:0.8125rem;font-weight:600;color:var(--text-secondary);margin-bottom:0.75rem;">Update ID Photo (Front)</label>
+                        <div style="display:flex;align-items:center;gap:1.25rem;flex-wrap:wrap;">
+                            <div id="idFrontPreview"
+                                style="width:100px;height:72px;border-radius:6px;background:var(--primary-100);color:var(--primary-600);display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;border:1px solid var(--border-color);"
+                                title="ID Front preview">
+                                <?php if (!empty($customer['id_photo_front_path'])): ?>
+                                    <?php if(str_ends_with(strtolower($customer['id_photo_front_path']), '.pdf')): ?>
+                                        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--primary-600);"><i data-lucide="file-text" style="width:24px;height:24px;margin-bottom:2px;"></i><span style="font-size:0.5rem;font-weight:bold;">PDF File</span></div>
+                                    <?php else: ?>
+                                        <img src="<?= htmlspecialchars('../../' . $customer['id_photo_front_path']) ?>" style="width:100%;height:100%;object-fit:cover;">
+                                    <?php endif; ?>
+                                <?php else: ?>
+                                    <i data-lucide="credit-card" style="width:32px;height:32px;opacity:0.5;"></i>
+                                <?php endif; ?>
+                            </div>
+                            <div style="flex:1;display:flex;flex-direction:column;gap:0.5rem;min-width:200px;">
+                                <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+                                    <div style="flex:1;min-width:160px;">
+                                        <input type="file" id="id_photo_front" name="id_photo_front" accept="image/*,application/pdf"
+                                            class="form-control" style="padding:0.4rem 0.5rem; font-size: 0.85rem;"
+                                            onchange="previewIDPhoto(this, 'idFrontPreview')">
+                                    </div>
+                                    <button type="button" onclick="openCamera('id_photo_front', 'Scan Front ID')"
+                                        class="btn btn-secondary" style="padding:0.4rem 0.85rem;font-size:0.85rem;display:flex;align-items:center;gap:6px;flex-shrink:0;" title="Use Camera">
+                                        <i data-lucide="camera" style="width:16px;height:16px;"></i>
+                                        <span>Camera</span>
+                                    </button>
+                                </div>
+                                <div style="font-size:0.75rem;color:var(--text-muted);display:flex;align-items:center;gap:4px;">
+                                    <i data-lucide="info" style="width:12px;height:12px;"></i> JPG, PNG, WebP, PDF — max 5 MB
+                                </div>
+                                <div id="cam_container_id_photo_front" style="display:none; padding:0; border:none; box-shadow:none; background:transparent; align-items:flex-start; margin-top:0.25rem; width:100%;">
+                                    <img id="cam_thumb_id_photo_front" style="display:none;" alt="cam">
+                                    <div class="cam-success-badge" style="width:100%; margin-top:0;">
+                                        <div class="cam-success-badge-title">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                                <path d="M20 6 9 17l-5-5"></path>
+                                            </svg>
+                                            Photo Captured
+                                        </div>
+                                        <div class="cam-success-badge-text">Save changes to confirm upload.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ID Back Photo Upload -->
+                    <div style="padding-top: 0.5rem; border-top: 1px dashed var(--border-color); margin-top: 0.5rem;">
+                        <label style="display:block;font-size:0.8125rem;font-weight:600;color:var(--text-secondary);margin-bottom:0.75rem;">Update ID Photo (Back)</label>
+                        <div style="display:flex;align-items:center;gap:1.25rem;flex-wrap:wrap;">
+                            <div id="idBackPreview"
+                                style="width:100px;height:72px;border-radius:6px;background:var(--primary-100);color:var(--primary-600);display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;border:1px solid var(--border-color);"
+                                title="ID Back preview">
+                                <?php if (!empty($customer['id_photo_back_path'])): ?>
+                                    <?php if(str_ends_with(strtolower($customer['id_photo_back_path']), '.pdf')): ?>
+                                        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--primary-600);"><i data-lucide="file-text" style="width:24px;height:24px;margin-bottom:2px;"></i><span style="font-size:0.5rem;font-weight:bold;">PDF File</span></div>
+                                    <?php else: ?>
+                                        <img src="<?= htmlspecialchars('../../' . $customer['id_photo_back_path']) ?>" style="width:100%;height:100%;object-fit:cover;">
+                                    <?php endif; ?>
+                                <?php else: ?>
+                                    <i data-lucide="scan-line" style="width:32px;height:32px;opacity:0.5;"></i>
+                                <?php endif; ?>
+                            </div>
+                            <div style="flex:1;display:flex;flex-direction:column;gap:0.5rem;min-width:200px;">
+                                <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+                                    <div style="flex:1;min-width:160px;">
+                                        <input type="file" id="id_photo_back" name="id_photo_back" accept="image/*,application/pdf"
+                                            class="form-control" style="padding:0.4rem 0.5rem; font-size: 0.85rem;"
+                                            onchange="previewIDPhoto(this, 'idBackPreview')">
+                                    </div>
+                                    <button type="button" onclick="openCamera('id_photo_back', 'Scan Back ID')"
+                                        class="btn btn-secondary" style="padding:0.4rem 0.85rem;font-size:0.85rem;display:flex;align-items:center;gap:6px;flex-shrink:0;" title="Use Camera">
+                                        <i data-lucide="camera" style="width:16px;height:16px;"></i>
+                                        <span>Camera</span>
+                                    </button>
+                                </div>
+                                <div style="font-size:0.75rem;color:var(--text-muted);display:flex;align-items:center;gap:4px;">
+                                    <i data-lucide="info" style="width:12px;height:12px;"></i> JPG, PNG, WebP, PDF — max 5 MB
+                                </div>
+                                <div id="cam_container_id_photo_back" style="display:none; padding:0; border:none; box-shadow:none; background:transparent; align-items:flex-start; margin-top:0.25rem; width:100%;">
+                                    <img id="cam_thumb_id_photo_back" style="display:none;" alt="cam">
+                                    <div class="cam-success-badge" style="width:100%; margin-top:0;">
+                                        <div class="cam-success-badge-title">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                                <path d="M20 6 9 17l-5-5"></path>
+                                            </svg>
+                                            Photo Captured
+                                        </div>
+                                        <div class="cam-success-badge-text">Save changes to confirm upload.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Notes -->
+            <div class="card" style="flex: 1; display: flex; flex-direction: column;">
+                <div class="card-header">
+                    <h2 class="card-title"><i data-lucide="file-text"
+                            style="width:18px;height:18px;margin-right:8px;vertical-align:-3px;color:var(--primary)"></i>Notes
+                    </h2>
+                </div>
+                <div class="card-body" style="flex: 1; display: flex; flex-direction: column;">
+                    <div class="form-group" style="margin: 0; flex: 1; display: flex; flex-direction: column;">
+                        <textarea id="notes" name="notes" class="form-control" style="flex: 1; min-height: 120px; resize: none;"
+                            placeholder="Any additional notes about this customer…"><?= htmlspecialchars($data['notes'] ?? '') ?></textarea>
+                    </div>
+                </div>
+            </div>
+            
+        </div>
     </div>
 
-    <?php if (!empty($errors)): ?>
-        <div class="flex gap-3 p-5 mb-6 bg-danger-50 border border-danger-100 rounded-2xl text-danger-700">
-            <i data-lucide="alert-circle" class="w-4 h-4 flex-shrink-0 mt-0.5"></i>
-            <ul class="text-xs font-medium list-disc list-inside space-y-0.5"><?php foreach ($errors as $e): ?>
-                    <li><?= htmlspecialchars($e) ?></li><?php endforeach; ?>
-            </ul>
-        </div>
-    <?php endif; ?>
+    <div style="display:flex;gap:1rem;margin-top:2rem;flex-wrap:wrap;align-items:center;">
+        <button type="submit" class="btn btn-primary" style="padding: 0.65rem 1.5rem; font-size: 0.95rem;">
+            <i data-lucide="save" style="width:18px;height:18px;"></i> Save Changes
+        </button>
+        <a href="customer-view.php?id=<?= $customerId ?>" class="btn btn-secondary" style="padding: 0.65rem 1.5rem; font-size: 0.95rem;">Cancel</a>
 
-    <form method="POST" enctype="multipart/form-data">
-        <?= csrfField() ?>
-        <div class="grid" style="grid-template-columns: 1fr 2fr; gap: var(--space-6);">
-            <!-- Left Column: Avatar & Actions -->
-            <div class="flex flex-col gap-6">
-                <!-- Avatar Card -->
-                <div class="card" style="text-align: center;">
-                    <div class="card-body">
-                        <?php if (!empty($customer['profile_picture_path'])): ?>
-                            <img src="<?= BASE_URL . ltrim($customer['profile_picture_path'], '/') ?>"
-                                style="width: 120px; height: 120px; border-radius: 50%; margin: 0 auto var(--space-4); object-fit: cover; border: 4px solid var(--primary-100);"
-                                alt="Profile Picture">
-                        <?php else: ?>
-                            <div
-                                style="width: 120px; height: 120px; border-radius: 50%; background: var(--primary); color: white; display: flex; align-items: center; justify-content: center; font-size: 2.5rem; font-weight: bold; margin: 0 auto var(--space-4);">
-                                <?= strtoupper(substr($customer['first_name'], 0, 1) . substr($customer['last_name'], 0, 1)) ?>
-                            </div>
-                        <?php endif; ?>
-                        <h2 style="margin-bottom: var(--space-2);">
-                            <?= htmlspecialchars($customer['first_name'] . ' ' . $customer['last_name']) ?>
-                        </h2>
-                        <p
-                            style="color: var(--text-muted); font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: var(--space-1);">
-                            <?= str_replace('_', ' ', ucfirst($customer['customer_type'] ?? 'Walk-in')) ?>
-                        </p>
-                        <p style="color: var(--text-secondary); font-size: 0.875rem;">
-                            <?= htmlspecialchars($customer['customer_code'] ?? '') ?>
-                        </p>
-                    </div>
-                </div>
+        <?php if ($customer['is_blacklisted']): ?>
+            <button type="button" class="btn btn-secondary" style="padding:0.65rem 1.5rem;font-size:0.95rem;border-color:var(--success);color:var(--success);" onclick="confirmBlacklist(false)">
+                <i data-lucide="user-check" style="width:18px;height:18px;"></i> Remove Blacklist
+            </button>
+        <?php else: ?>
+            <button type="button" class="btn btn-secondary" style="padding:0.65rem 1.5rem;font-size:0.95rem;border-color:var(--danger);color:var(--danger);" onclick="confirmBlacklist(true)">
+                <i data-lucide="user-x" style="width:18px;height:18px;"></i> Blacklist Customer
+            </button>
+        <?php endif; ?>
 
-                <!-- Notes Card -->
-                <div class="card">
-                    <div class="card-body">
-                        <label
-                            class="block text-[10px] font-black uppercase tracking-widest text-secondary-400 mb-3">Notes</label>
-                        <textarea name="notes" rows="6"
-                            class="form-input w-full rounded-2xl py-3.5 bg-secondary-50 resize-none"><?= htmlspecialchars($data['notes'] ?? '') ?></textarea>
-                    </div>
-                </div>
-
-                <!-- Page Actions via Template -->
-                <div
-                    style="display: flex; flex-direction: column; gap: var(--space-3); position: sticky; top: var(--space-6);">
-                    <button type="submit" class="btn btn-primary" style="justify-content: center;">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
-                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                            data-lucide="save" aria-hidden="true" class="lucide lucide-save w-4 h-4">
-                            <path
-                                d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z">
-                            </path>
-                            <path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"></path>
-                            <path d="M7 3v4a1 1 0 0 0 1 1h7"></path>
-                        </svg> Save Changes
-                    </button>
-                    <a href="customer-view.php?id=<?= $customerId ?>" class="btn btn-secondary"
-                        style="justify-content: center;">
-                        <i data-lucide="x" class="w-4 h-4"></i> Cancel
-                    </a>
-                    
-                    <?php if ($authUser->hasPermission('customers.delete')): ?>
-                    <hr style="margin: var(--space-2) 0; border: none; border-top: 1px dashed var(--border-color);">
-                    <button type="button" class="btn btn-danger" style="justify-content: center;" onclick="confirmDelete()">
-                        <i data-lucide="trash-2" class="w-4 h-4"></i> Delete Profile
-                    </button>
-                    <?php endif; ?>
-                </div>
+        <?php if ($authUser->hasPermission('customers.delete')): ?>
+            <div style="margin-left:auto;">
+                <button type="button" class="btn btn-danger" style="padding: 0.65rem 1.5rem; font-size: 0.95rem;" onclick="confirmDelete()">
+                    <i data-lucide="trash-2" style="width:18px;height:18px;"></i> Delete Profile
+                </button>
             </div>
+        <?php endif; ?>
+    </div>
+</form>
 
-            <!-- Right Column: Form Fields -->
-            <div class="flex flex-col gap-6">
-                <!-- Personal Info -->
-                <div class="card">
-                    <div class="card-body">
-                        <h2
-                            class="text-xs font-black uppercase tracking-widest text-secondary-900 mb-6 flex items-center gap-2">
-                            <i data-lucide="user" class="w-4 h-4 text-primary-600"></i> Personal Information
-                        </h2>
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
-                            <?php foreach ([['first_name', 'First Name', true], ['middle_name', 'Middle Name', false], ['last_name', 'Last Name', true]] as [$n, $l, $r]): ?>
-                                <div>
-                                    <label
-                                        class="block text-[10px] font-black uppercase tracking-widest text-secondary-400 mb-2"><?= $l ?><?= $r ? ' <span class="text-danger-500">*</span>' : '' ?></label>
-                                    <input type="text" name="<?= $n ?>"
-                                        class="form-input w-full rounded-2xl py-3.5 bg-secondary-50"
-                                        value="<?= htmlspecialchars($data[$n] ?? '') ?>" <?= $r ? 'required' : '' ?>>
-                                </div>
-                            <?php endforeach; ?>
-                            <div class="flex flex-col gap-5">
-                                <div>
-                                    <label
-                                        class="block text-[10px] font-black uppercase tracking-widest text-secondary-400 mb-2">Date
-                                        of Birth</label>
-                                    <input type="date" name="date_of_birth"
-                                        class="form-input w-full rounded-2xl py-3.5 bg-secondary-50"
-                                        value="<?= htmlspecialchars($data['date_of_birth'] ?? '') ?>">
-                                </div>
-                                <!-- Profile Photo Upload -->
-                                <div style="margin-top:1.5rem;padding:1.5rem;border-radius:12px;background:linear-gradient(to right, var(--bg-muted), transparent);border:1px solid var(--border-color);">
-                                    <label style="display:block;font-size:.85rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-color);margin-bottom:1rem;">Update Profile Picture</label>
-                                    <div style="display:flex;align-items:center;gap:1.5rem;flex-wrap:wrap;">
-                                        <!-- Current / live-preview avatar -->
-                                        <div id="customerPhotoPreview"
-                                            style="width:96px;height:96px;border-radius:50%;background:linear-gradient(135deg, var(--primary), var(--primary-dark));color:#fff;display:flex;align-items:center;justify-content:center;font-size:2rem;font-weight:700;flex-shrink:0;overflow:hidden;border:4px solid #fff;box-shadow:0 10px 25px -5px rgba(0,0,0,0.15);transition:transform .3s ease, box-shadow .3s ease;"
-                                            onmouseover="this.style.transform='scale(1.05)';this.style.boxShadow='0 15px 35px -5px rgba(0,0,0,0.2)';"
-                                            onmouseout="this.style.transform='scale(1)';this.style.boxShadow='0 10px 25px -5px rgba(0,0,0,0.15)';"
-                                            title="Photo preview">
-                                            <?php if (!empty($customer['profile_picture_path'])): ?>
-                                                <img src="<?= BASE_URL . ltrim($customer['profile_picture_path'], '/') ?>"
-                                                    style="width:100%;height:100%;object-fit:cover;" alt="Profile">
-                                            <?php else: ?>
-                                                <span><?= strtoupper(substr($data['first_name'] ?? '', 0, 1) . substr($data['last_name'] ?? '', 0, 1)) ?></span>
-                                            <?php endif; ?>
-                                        </div>
-                                        <div style="flex:1;display:flex;flex-direction:column;gap:.75rem;min-width:260px;">
-                                            <p style="font-size:.8rem;color:var(--text-muted);margin:0;line-height:1.4;">Upload a new photo to update the profile.</p>
-                                            <div style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;">
-                                                <div style="position:relative;flex:1;min-width:200px;">
-                                                    <input type="file" id="profile_picture" name="profile_picture" accept="image/*"
-                                                        style="width:100%;padding:.65rem 1rem;border:2px dashed var(--border-color);border-radius:var(--radius-md);font-size:.875rem;cursor:pointer;background:var(--bg-card);transition:all 0.2s;"
-                                                        onmouseover="this.style.borderColor='var(--primary)';this.style.background='var(--primary-50)';"
-                                                        onmouseout="this.style.borderColor='var(--border-color)';this.style.background='var(--bg-card)';"
-                                                        onchange="previewCustomerPhoto(this)">
-                                                </div>
-                                                <button type="button" onclick="openCamera('profile_picture', 'Take Profile Picture')"
-                                                    class="btn btn-secondary" style="padding:.65rem 1.25rem;border-radius:var(--radius-md);display:flex;align-items:center;justify-content:center;gap:8px;font-weight:600;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);transition:all 0.2s;flex-shrink:0;" title="Use Camera"
-                                                    onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 12px -2px rgba(0,0,0,0.1)';"
-                                                    onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 4px 6px -1px rgba(0,0,0,0.05)';">
-                                                    <i data-lucide="camera" style="width:18px;height:18px;color:var(--primary);"></i>
-                                                    <span>Camera</span>
-                                                </button>
-                                            </div>
-                                            <div style="display:flex;align-items:center;gap:6px;font-size:.75rem;color:var(--text-muted);font-weight:500;">
-                                            <?php if (!empty($customer['profile_picture_path'])): ?>
-                                                <span style="color:var(--text-success);display:inline-flex;align-items:center;gap:4px;">
-                                                    <i data-lucide="check" style="width:14px;height:14px;"></i> Photo currently on file
-                                                </span>
-                                            <?php else: ?>
-                                                <span><i data-lucide="info" style="width:14px;height:14px;vertical-align:-2px;margin-right:2px;"></i> JPG, PNG, WebP — max 5 MB</span>
-                                            <?php endif; ?>
-                                            </div>
-                                            
-                                            <!-- Pre-defined camera success container to integrate smoothly -->
-                                            <div id="cam_container_profile_picture" style="display:none; padding:0; border:none; box-shadow:none; background:transparent; align-items:flex-start; margin-top:0.25rem; width:100%;">
-                                                <img id="cam_thumb_profile_picture" style="display:none;" alt="cam">
-                                                <div class="cam-success-badge" style="width:100%; margin-top:0;">
-                                                    <div class="cam-success-badge-title">
-                                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                                                            <path d="M20 6 9 17l-5-5"></path>
-                                                        </svg>
-                                                        Photo Captured
-                                                    </div>
-                                                    <div class="cam-success-badge-text">Save form to confirm upload.</div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div>
-                                <label
-                                    class="block text-[10px] font-black uppercase tracking-widest text-secondary-400 mb-2">Customer
-                                    Type</label>
-                                <select name="customer_type"
-                                    class="form-input w-full rounded-2xl py-3.5 bg-secondary-50">
-                                    <?php foreach (['walk_in' => 'Walk-in', 'online' => 'Online', 'corporate' => 'Corporate', 'repeat' => 'Repeat', 'referral' => 'Referral'] as $v => $l): ?>
-                                        <option value="<?= $v ?>" <?= ($data['customer_type'] ?? '') === $v ? 'selected' : '' ?>>
-                                            <?= $l ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                            <div>
-                                <label
-                                    class="block text-[10px] font-black uppercase tracking-widest text-secondary-400 mb-2">Account Standing</label>
-                                <select name="is_blacklisted" class="form-input w-full rounded-2xl py-3.5 bg-secondary-50">
-                                    <option value="0" <?= empty($data['is_blacklisted']) ? 'selected' : '' ?>>Good Standing (Active)</option>
-                                    <option value="1" <?= !empty($data['is_blacklisted']) ? 'selected' : '' ?>>Blacklisted (High Risk)</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Contact -->
-                <div class="card">
-                    <div class="card-body">
-                        <h2
-                            class="text-xs font-black uppercase tracking-widest text-secondary-900 mb-6 flex items-center gap-2">
-                            <i data-lucide="phone" class="w-4 h-4 text-success-600"></i> Contact Information
-                        </h2>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                            <div><label
-                                    class="block text-[10px] font-black uppercase tracking-widest text-secondary-400 mb-2">Primary
-                                    Phone <span class="text-danger-500">*</span></label><input type="text"
-                                    name="phone_primary" class="form-input w-full rounded-2xl py-3.5 bg-secondary-50"
-                                    value="<?= htmlspecialchars($data['phone_primary'] ?? '') ?>" required></div>
-                            <div><label
-                                    class="block text-[10px] font-black uppercase tracking-widest text-secondary-400 mb-2">Secondary
-                                    Phone</label><input type="text" name="phone_secondary"
-                                    class="form-input w-full rounded-2xl py-3.5 bg-secondary-50"
-                                    value="<?= htmlspecialchars($data['phone_secondary'] ?? '') ?>"></div>
-                            <div class="md:col-span-2"><label
-                                    class="block text-[10px] font-black uppercase tracking-widest text-secondary-400 mb-2">Email</label><input
-                                    type="email" name="email"
-                                    class="form-input w-full rounded-2xl py-3.5 bg-secondary-50"
-                                    value="<?= htmlspecialchars($data['email'] ?? '') ?>"></div>
-                            <div class="md:col-span-2"><label
-                                    class="block text-[10px] font-black uppercase tracking-widest text-secondary-400 mb-2">Address</label><textarea
-                                    name="address" rows="2"
-                                    class="form-input w-full rounded-2xl py-3.5 bg-secondary-50 resize-none"><?= htmlspecialchars($data['address'] ?? '') ?></textarea>
-                            </div>
-                            <div><label
-                                    class="block text-[10px] font-black uppercase tracking-widest text-secondary-400 mb-2">City</label><input
-                                    type="text" name="city" class="form-input w-full rounded-2xl py-3.5 bg-secondary-50"
-                                    value="<?= htmlspecialchars($data['city'] ?? '') ?>"></div>
-                            <div><label
-                                    class="block text-[10px] font-black uppercase tracking-widest text-secondary-400 mb-2">Province</label><input
-                                    type="text" name="province"
-                                    class="form-input w-full rounded-2xl py-3.5 bg-secondary-50"
-                                    value="<?= htmlspecialchars($data['province'] ?? '') ?>"></div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- ID Verification -->
-                <div class="card">
-                    <div class="card-body">
-                        <h2
-                            class="text-xs font-black uppercase tracking-widest text-secondary-900 mb-6 flex items-center gap-2">
-                            <i data-lucide="shield-check" class="w-4 h-4 text-warning-600"></i> ID Verification
-                            (Optional Update)
-                        </h2>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                            <!-- ID Front Photo Upload -->
-                            <div style="padding:1.5rem;border-radius:12px;background:linear-gradient(to right, var(--bg-muted), transparent);border:1px solid var(--border-color);">
-                                <label style="display:block;font-size:.85rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-color);margin-bottom:1rem;">Update ID Photo (Front)</label>
-                                <div style="display:flex;align-items:center;gap:1.5rem;flex-wrap:wrap;">
-                                    <div id="idFrontPreview"
-                                        style="width:140px;height:96px;border-radius:12px;background:linear-gradient(135deg, var(--primary), var(--primary-dark));color:#fff;display:flex;align-items:center;justify-content:center;font-size:2rem;font-weight:700;flex-shrink:0;overflow:hidden;border:4px solid #fff;box-shadow:0 10px 25px -5px rgba(0,0,0,0.15);transition:transform .3s ease, box-shadow .3s ease;"
-                                        onmouseover="this.style.transform='scale(1.05)';this.style.boxShadow='0 15px 35px -5px rgba(0,0,0,0.2)';"
-                                        onmouseout="this.style.transform='scale(1)';this.style.boxShadow='0 10px 25px -5px rgba(0,0,0,0.15)';"
-                                        title="ID Front preview">
-                                        <?php if (!empty($customer['id_photo_front_path'])): ?>
-                                            <?php if(str_ends_with(strtolower($customer['id_photo_front_path']), '.pdf')): ?>
-                                                <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;"><i data-lucide="file-text" style="width:32px;height:32px;margin-bottom:4px;"></i><span style="font-size:0.6rem;font-weight:bold;">PDF File</span></div>
-                                            <?php else: ?>
-                                                <img src="<?= htmlspecialchars('../../' . $customer['id_photo_front_path']) ?>" style="width:100%;height:100%;object-fit:cover;" onerror="this.outerHTML='<i data-lucide=\'credit-card\' style=\'width:44px;height:44px;opacity:0.9;\'></i>'">
-                                            <?php endif; ?>
-                                        <?php else: ?>
-                                            <i data-lucide="credit-card" style="width:44px;height:44px;opacity:0.9;"></i>
-                                        <?php endif; ?>
-                                    </div>
-                                    <div style="flex:1;display:flex;flex-direction:column;gap:.75rem;min-width:200px;">
-                                        <div style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;">
-                                            <div style="position:relative;flex:1;min-width:160px;">
-                                                <input type="file" id="id_photo_front" name="id_photo_front" accept="image/*,application/pdf"
-                                                    style="width:100%;padding:.65rem 1rem;border:2px dashed var(--border-color);border-radius:var(--radius-md);font-size:.875rem;cursor:pointer;background:var(--bg-card);transition:all 0.2s;"
-                                                    onmouseover="this.style.borderColor='var(--primary)';this.style.background='var(--primary-50)';"
-                                                    onmouseout="this.style.borderColor='var(--border-color)';this.style.background='var(--bg-card)';"
-                                                    onchange="previewIDPhoto(this, 'idFrontPreview')">
-                                            </div>
-                                            <button type="button" onclick="openCamera('id_photo_front', 'Scan Front ID')"
-                                                class="btn btn-secondary" style="padding:.65rem 1.25rem;border-radius:var(--radius-md);display:flex;align-items:center;justify-content:center;gap:8px;font-weight:600;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);transition:all 0.2s;flex-shrink:0;" title="Use Camera"
-                                                onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 12px -2px rgba(0,0,0,0.1)';"
-                                                onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 4px 6px -1px rgba(0,0,0,0.05)';">
-                                                <i data-lucide="camera" style="width:18px;height:18px;color:var(--primary);"></i>
-                                                <span>Camera</span>
-                                            </button>
-                                        </div>
-                                        <div style="display:flex;align-items:center;gap:6px;font-size:.75rem;color:var(--text-muted);font-weight:500;">
-                                            <i data-lucide="info" style="width:14px;height:14px;"></i> JPG, PNG, WebP, PDF — max 5 MB
-                                        </div>
-                                        <?php if (!empty($customer['id_photo_front_path'])): ?>
-                                            <div style="display:flex;align-items:center;gap:6px;font-size:.75rem;color:var(--success);font-weight:700;">
-                                                <i data-lucide="check-circle" style="width:14px;height:14px;"></i> Front photo is currently on file.
-                                            </div>
-                                        <?php endif; ?>
-                                        <div id="cam_container_id_photo_front" style="display:none; padding:0; border:none; box-shadow:none; background:transparent; align-items:flex-start; margin-top:0.25rem; width:100%;">
-                                            <img id="cam_thumb_id_photo_front" style="display:none;" alt="cam">
-                                            <div class="cam-success-badge" style="width:100%; margin-top:0;">
-                                                <div class="cam-success-badge-title">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                                                        <path d="M20 6 9 17l-5-5"></path>
-                                                    </svg>
-                                                    Photo Captured
-                                                </div>
-                                                <div class="cam-success-badge-text">Save changes to confirm upload.</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <!-- ID Back Photo Upload -->
-                            <div style="padding:1.5rem;border-radius:12px;background:linear-gradient(to right, var(--bg-muted), transparent);border:1px solid var(--border-color);">
-                                <label style="display:block;font-size:.85rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-color);margin-bottom:1rem;">Update ID Photo (Back)</label>
-                                <div style="display:flex;align-items:center;gap:1.5rem;flex-wrap:wrap;">
-                                    <div id="idBackPreview"
-                                        style="width:140px;height:96px;border-radius:12px;background:linear-gradient(135deg, var(--primary), var(--primary-dark));color:#fff;display:flex;align-items:center;justify-content:center;font-size:2rem;font-weight:700;flex-shrink:0;overflow:hidden;border:4px solid #fff;box-shadow:0 10px 25px -5px rgba(0,0,0,0.15);transition:transform .3s ease, box-shadow .3s ease;"
-                                        onmouseover="this.style.transform='scale(1.05)';this.style.boxShadow='0 15px 35px -5px rgba(0,0,0,0.2)';"
-                                        onmouseout="this.style.transform='scale(1)';this.style.boxShadow='0 10px 25px -5px rgba(0,0,0,0.15)';"
-                                        title="ID Back preview">
-                                        <?php if (!empty($customer['id_photo_back_path'])): ?>
-                                            <?php if(str_ends_with(strtolower($customer['id_photo_back_path']), '.pdf')): ?>
-                                                <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;"><i data-lucide="file-text" style="width:32px;height:32px;margin-bottom:4px;"></i><span style="font-size:0.6rem;font-weight:bold;">PDF File</span></div>
-                                            <?php else: ?>
-                                                <img src="<?= htmlspecialchars('../../' . $customer['id_photo_back_path']) ?>" style="width:100%;height:100%;object-fit:cover;" onerror="this.outerHTML='<i data-lucide=\'scan-line\' style=\'width:44px;height:44px;opacity:0.9;\'></i>'">
-                                            <?php endif; ?>
-                                        <?php else: ?>
-                                            <i data-lucide="scan-line" style="width:44px;height:44px;opacity:0.9;"></i>
-                                        <?php endif; ?>
-                                    </div>
-                                    <div style="flex:1;display:flex;flex-direction:column;gap:.75rem;min-width:200px;">
-                                        <div style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;">
-                                            <div style="position:relative;flex:1;min-width:160px;">
-                                                <input type="file" id="id_photo_back" name="id_photo_back" accept="image/*,application/pdf"
-                                                    style="width:100%;padding:.65rem 1rem;border:2px dashed var(--border-color);border-radius:var(--radius-md);font-size:.875rem;cursor:pointer;background:var(--bg-card);transition:all 0.2s;"
-                                                    onmouseover="this.style.borderColor='var(--primary)';this.style.background='var(--primary-50)';"
-                                                    onmouseout="this.style.borderColor='var(--border-color)';this.style.background='var(--bg-card)';"
-                                                    onchange="previewIDPhoto(this, 'idBackPreview')">
-                                            </div>
-                                            <button type="button" onclick="openCamera('id_photo_back', 'Scan Back ID')"
-                                                class="btn btn-secondary" style="padding:.65rem 1.25rem;border-radius:var(--radius-md);display:flex;align-items:center;justify-content:center;gap:8px;font-weight:600;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);transition:all 0.2s;flex-shrink:0;" title="Use Camera"
-                                                onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 12px -2px rgba(0,0,0,0.1)';"
-                                                onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 4px 6px -1px rgba(0,0,0,0.05)';">
-                                                <i data-lucide="camera" style="width:18px;height:18px;color:var(--primary);"></i>
-                                                <span>Camera</span>
-                                            </button>
-                                        </div>
-                                        <div style="display:flex;align-items:center;gap:6px;font-size:.75rem;color:var(--text-muted);font-weight:500;">
-                                            <i data-lucide="info" style="width:14px;height:14px;"></i> JPG, PNG, WebP, PDF — max 5 MB
-                                        </div>
-                                        <?php if (!empty($customer['id_photo_back_path'])): ?>
-                                            <div style="display:flex;align-items:center;gap:6px;font-size:.75rem;color:var(--success);font-weight:700;">
-                                                <i data-lucide="check-circle" style="width:14px;height:14px;"></i> Back photo is currently on file.
-                                            </div>
-                                        <?php endif; ?>
-                                        <div id="cam_container_id_photo_back" style="display:none; padding:0; border:none; box-shadow:none; background:transparent; align-items:flex-start; margin-top:0.25rem; width:100%;">
-                                            <img id="cam_thumb_id_photo_back" style="display:none;" alt="cam">
-                                            <div class="cam-success-badge" style="width:100%; margin-top:0;">
-                                                <div class="cam-success-badge-title">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                                                        <path d="M20 6 9 17l-5-5"></path>
-                                                    </svg>
-                                                    Photo Captured
-                                                </div>
-                                                <div class="cam-success-badge-text">Save changes to confirm upload.</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-            </div>
-        </div>
-</div>
-</div>
-</div>
+<!-- Hidden form: toggle blacklist status -->
+<form id="blacklistForm" method="POST" style="display:none;">
+    <?= csrfField() ?>
+    <input type="hidden" name="action" value="update">
+    <!-- carry all required fields with current values -->
+    <input type="hidden" name="first_name"             value="<?= htmlspecialchars($customer['first_name']) ?>">
+    <input type="hidden" name="last_name"              value="<?= htmlspecialchars($customer['last_name']) ?>">
+    <input type="hidden" name="middle_name"            value="<?= htmlspecialchars($customer['middle_name'] ?? '') ?>">
+    <input type="hidden" name="date_of_birth"          value="<?= htmlspecialchars($customer['date_of_birth'] ?? '') ?>">
+    <input type="hidden" name="gender"                 value="<?= htmlspecialchars($customer['gender'] ?? '') ?>">
+    <input type="hidden" name="customer_type"          value="<?= htmlspecialchars($customer['customer_type'] ?? 'walk_in') ?>">
+    <input type="hidden" name="phone_primary"          value="<?= htmlspecialchars($customer['phone_primary']) ?>">
+    <input type="hidden" name="phone_secondary"        value="<?= htmlspecialchars($customer['phone_secondary'] ?? '') ?>">
+    <input type="hidden" name="email"                  value="<?= htmlspecialchars($customer['email'] ?? '') ?>">
+    <input type="hidden" name="address"                value="<?= htmlspecialchars($customer['address'] ?? '') ?>">
+    <input type="hidden" name="city"                   value="<?= htmlspecialchars($customer['city'] ?? '') ?>">
+    <input type="hidden" name="province"               value="<?= htmlspecialchars($customer['province'] ?? '') ?>">
+    <input type="hidden" name="notes"                  value="<?= htmlspecialchars($customer['notes'] ?? '') ?>">
+    <input type="hidden" name="id_type"                value="<?= htmlspecialchars($customer['id_type'] ?? 'drivers_license') ?>">
+    <input type="hidden" name="id_number"              value="<?= htmlspecialchars($customer['id_number'] ?? '') ?>">
+    <input type="hidden" name="id_expiry_date"         value="<?= htmlspecialchars($customer['id_expiry_date'] ?? '') ?>">
+    <input type="hidden" name="emergency_name"         value="<?= htmlspecialchars($customer['emergency_name'] ?? '') ?>">
+    <input type="hidden" name="emergency_phone"        value="<?= htmlspecialchars($customer['emergency_phone'] ?? '') ?>">
+    <input type="hidden" name="emergency_relationship" value="<?= htmlspecialchars($customer['emergency_relationship'] ?? '') ?>">
+    <input type="hidden" name="is_blacklisted" id="blacklistValue" value="<?= $customer['is_blacklisted'] ? '0' : '1' ?>">
 </form>
 
 <?php if ($authUser->hasPermission('customers.delete')): ?>
@@ -455,7 +506,7 @@ require_once '../../includes/header.php';
 function confirmDelete() {
     openGcrModal({
         title: 'Delete Customer',
-        message: 'Are you sure you want to permanently delete this customer? This action <strong class="text-danger-600">cannot be undone</strong>.',
+        message: 'Are you sure you want to permanently delete this customer? This action <strong class="text-danger">cannot be undone</strong>.',
         variant: 'danger',
         confirmLabel: 'Yes, Delete',
         icon: 'trash-2',
@@ -466,8 +517,25 @@ function confirmDelete() {
 }
 </script>
 <?php endif; ?>
+<script>
+function confirmBlacklist(blacklisting) {
+    const name = <?= json_encode($customer['first_name'] . ' ' . $customer['last_name']) ?>;
+    openGcrModal({
+        title: blacklisting ? 'Blacklist Customer' : 'Remove Blacklist',
+        message: blacklisting
+            ? `Are you sure you want to blacklist <strong>${name}</strong>? They will no longer be eligible to rent vehicles.`
+            : `Are you sure you want to remove the blacklist on <strong>${name}</strong>? They will be able to rent vehicles again.`,
+        variant: blacklisting ? 'danger' : 'warning',
+        confirmLabel: blacklisting ? 'Yes, Blacklist' : 'Yes, Remove Blacklist',
+        icon: blacklisting ? 'user-x' : 'user-check',
+        onConfirm: function() {
+            document.getElementById('blacklistValue').value = blacklisting ? '1' : '0';
+            document.getElementById('blacklistForm').submit();
+        }
+    });
+}
+</script>
 
-</div>
 <script>
 lucide.createIcons();
 function previewCustomerPhoto(input) {
@@ -477,6 +545,7 @@ function previewCustomerPhoto(input) {
         const preview = document.getElementById('customerPhotoPreview');
         if (preview) {
             preview.innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover;">`;
+            preview.style.background = 'transparent';
         }
     };
     reader.readAsDataURL(input.files[0]);
@@ -488,12 +557,14 @@ function previewIDPhoto(input, targetId) {
     if (!preview) return;
 
     if (file.type === 'application/pdf') {
-        preview.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;"><i data-lucide="file-text" style="width:32px;height:32px;margin-bottom:4px;"></i><span style="font-size:0.6rem;font-weight:bold;">PDF File</span></div>`;
+        preview.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--primary-600);"><i data-lucide="file-text" style="width:32px;height:32px;margin-bottom:4px;"></i><span style="font-size:0.6rem;font-weight:bold;">PDF File</span></div>`;
         lucide.createIcons();
+        preview.style.background = 'var(--primary-100)';
     } else {
         const reader = new FileReader();
         reader.onload = function(e) {
             preview.innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover;">`;
+            preview.style.background = 'transparent';
         };
         reader.readAsDataURL(file);
     }

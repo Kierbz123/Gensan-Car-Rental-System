@@ -176,11 +176,16 @@ require_once '../../includes/header.php';
             <!-- Notes Card -->
             <div class="card">
                 <div class="card-body">
-                    <label
-                        class="block text-[10px] font-black uppercase tracking-widest text-secondary-400 mb-3">Notes</label>
-                    <textarea name="notes" rows="6"
-                        class="form-input w-full rounded-2xl py-3.5 bg-secondary-50 resize-none"
-                        readonly><?= htmlspecialchars($customer['notes'] ?? '') ?></textarea>
+                    <label style="display: block; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 0.75rem;">Notes</label>
+                    <?php if (!empty($customer['notes'])): ?>
+                        <div style="width: 100%; padding: 1rem; background: var(--secondary-50); border-radius: var(--radius-md); border: 1px solid var(--border-color); white-space: pre-wrap; line-height: 1.6; color: var(--text-main); font-size: 0.875rem;">
+                            <?= htmlspecialchars($customer['notes']) ?>
+                        </div>
+                    <?php else: ?>
+                        <div style="width: 100%; padding: 1.5rem 1rem; background: var(--bg-muted); border-radius: var(--radius-md); border: 1px dashed var(--border-color); text-align: center; color: var(--text-muted); font-size: 0.875rem; font-style: italic;">
+                            No notes available for this customer.
+                        </div>
+                    <?php endif; ?>
                 </div>
             </div>
 
@@ -299,29 +304,34 @@ require_once '../../includes/header.php';
             <!-- Document Repository -->
             <div class="card">
                 <div class="card-header" style="border-bottom: 1px solid var(--border-color); padding: var(--space-4); margin: -var(--space-4) -var(--space-4) var(--space-4) -var(--space-4);">
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; width: 100%;">
                         <h2 class="card-title" style="margin: 0; font-size: 1.1rem; display:flex; align-items:center; gap:8px;">
                             <i data-lucide="files" style="color:var(--accent);"></i> Customer Documents
                         </h2>
                         <?php if ($authUser->hasPermission('customers.update')): ?>
-                        <button type="button" onclick="document.getElementById('uploadDocForm').style.display='block'; this.style.display='none';" class="btn btn-sm btn-primary">
-                            <i data-lucide="upload-cloud" style="width:14px;height:14px;"></i> Upload
+                        <button type="button" onclick="document.getElementById('uploadDocForm').style.display='block'; this.style.display='none';" class="btn btn-sm btn-primary" style="display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); padding: 0.5rem 1rem; border-radius: var(--radius-md); font-weight: 600; transition: all 0.2s ease;">
+                            <i data-lucide="upload-cloud" style="width:16px;height:16px;"></i> Upload
                         </button>
                         <?php endif; ?>
                     </div>
                 </div>
 
                 <?php if ($authUser->hasPermission('customers.update')): ?>
-                <form id="uploadDocForm" method="POST" enctype="multipart/form-data" style="display:none; padding:1rem; background:var(--bg-muted); border-radius:var(--radius-md); margin-bottom:1rem; border:1px solid var(--border-color);">
-                    <p style="margin:0 0 1rem 0; font-size:0.875rem; font-weight:700;">Upload New Document</p>
-                    <div class="grid" style="grid-template-columns: 1fr 1fr; gap:0.75rem; margin-bottom:0.75rem;">
+                <form id="uploadDocForm" method="POST" enctype="multipart/form-data" style="display:none; padding:1.5rem; background:var(--secondary-50); border-radius:var(--radius-lg); margin-bottom:1.5rem; border:1px dashed var(--border-color); position: relative; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);">
+                    <div style="margin-bottom: 1.25rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem;">
+                        <h3 style="margin:0; font-size:1.05rem; font-weight:700; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="upload" style="width: 18px; height: 18px; color: var(--primary);"></i> Upload New Document
+                        </h3>
+                        <p style="margin: 4px 0 0 0; font-size: 0.8rem; color: var(--text-muted);">Please select a file and provide the necessary details below.</p>
+                    </div>
+                    <div class="grid" style="grid-template-columns: 1fr 1fr; gap:1.25rem; margin-bottom:1.25rem;">
                         <div>
-                            <label style="display:block; font-size:0.75rem; margin-bottom:4px; font-weight:600;">File * (Max 10MB)</label>
-                            <input type="file" name="document_file" required class="form-control" style="padding:4px;">
+                            <label style="display:block; font-size:0.75rem; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px; font-weight:700;">File * <span style="font-weight:normal; text-transform:none;">(Max 10MB)</span></label>
+                            <input type="file" name="document_file" required class="form-control" style="padding: 0.5rem; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: #fff; width: 100%;">
                         </div>
                         <div>
-                            <label style="display:block; font-size:0.75rem; margin-bottom:4px; font-weight:600;">Category *</label>
-                            <select name="document_category" required class="form-control" style="padding:6px;">
+                            <label style="display:block; font-size:0.75rem; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px; font-weight:700;">Category *</label>
+                            <select name="document_category" required class="form-control" style="padding: 0.5rem; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: #fff; width: 100%;">
                                 <option value="identity">Identity / ID Card</option>
                                 <option value="contract">Contract / Agreement</option>
                                 <option value="billing">Proof of Billing</option>
@@ -329,16 +339,18 @@ require_once '../../includes/header.php';
                             </select>
                         </div>
                         <div style="grid-column: 1 / -1;">
-                            <label style="display:block; font-size:0.75rem; margin-bottom:4px; font-weight:600;">Title & Expiry Date (Optional)</label>
-                            <div style="display:flex; gap:0.75rem;">
-                                <input type="text" name="document_title" class="form-control" placeholder="Custom name" style="flex:1;">
-                                <input type="date" name="expires_at" class="form-control" style="width:150px;">
+                            <label style="display:block; font-size:0.75rem; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px; font-weight:700;">Title & Expiry Date <span style="font-weight:normal; text-transform:none;">(Optional)</span></label>
+                            <div style="display:flex; gap:1rem;">
+                                <input type="text" name="document_title" class="form-control" placeholder="e.g. Driver's License" style="flex:1; padding: 0.5rem 0.75rem; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: #fff;">
+                                <input type="date" name="expires_at" class="form-control" style="width:180px; padding: 0.5rem 0.75rem; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: #fff;">
                             </div>
                         </div>
                     </div>
-                    <div style="text-align:right;">
-                        <button type="button" onclick="document.getElementById('uploadDocForm').style.display='none'; document.querySelector('#uploadDocForm').previousElementSibling.querySelector('button').style.display='inline-flex';" class="btn btn-sm btn-ghost">Cancel</button>
-                        <button type="submit" class="btn btn-sm btn-primary">Save Document</button>
+                    <div style="display:flex; justify-content:flex-end; gap: 0.75rem; border-top: 1px solid var(--border-color); padding-top: 1.25rem;">
+                        <button type="button" onclick="document.getElementById('uploadDocForm').style.display='none'; document.querySelector('#uploadDocForm').previousElementSibling.querySelector('button').style.display='inline-flex';" class="btn btn-sm" style="background: var(--bg-muted); color: var(--text-main); border: 1px solid var(--border-color); font-weight: 600; padding: 0.5rem 1rem;">Cancel</button>
+                        <button type="submit" class="btn btn-sm btn-primary" style="display: inline-flex; align-items: center; gap: 6px; font-weight: 600; padding: 0.5rem 1rem;">
+                            <i data-lucide="check" style="width:16px;height:16px;"></i> Save Document
+                        </button>
                     </div>
                 </form>
                 <?php endif; ?>

@@ -27,19 +27,17 @@ try {
         $navBadges['inventory'] = (int) $db->fetchColumn("SELECT COUNT(*) FROM parts_inventory WHERE reorder_level > 0 AND quantity_on_hand <= reorder_level");
     }
     if ($authUser->hasPermission('maintenance.view')) {
-        $navBadges['maintenance'] = (int) $db->fetchColumn("
-            SELECT COUNT(*) FROM maintenance_schedules ms
-            JOIN vehicles v ON ms.vehicle_id = v.vehicle_id
-            WHERE ms.status IN ('scheduled', 'active', 'overdue') 
-              AND (ms.next_due_date <= CURDATE() OR v.mileage >= ms.next_due_mileage)
-        ");
+        $navBadges['maintenance'] = (int) $db->fetchColumn("SELECT COUNT(*) FROM maintenance_schedules WHERE status != 'completed'");
     }
     if ($authUser->hasPermission('compliance.view')) {
         $navBadges['compliance'] = (int) $db->fetchColumn("
             SELECT COUNT(*) FROM compliance_records c 
-            WHERE expiry_date <= DATE_ADD(CURRENT_DATE(), INTERVAL 7 DAY) 
-              AND status NOT IN ('renewed', 'cancelled')
-              AND record_id = (
+            JOIN vehicles v ON c.vehicle_id = v.vehicle_id
+            WHERE c.expiry_date <= DATE_ADD(CURRENT_DATE(), INTERVAL 7 DAY) 
+              AND c.expiry_date != '0000-00-00'
+              AND c.status NOT IN ('renewed', 'cancelled')
+              AND v.deleted_at IS NULL
+              AND c.record_id = (
                   SELECT MAX(record_id)
                   FROM compliance_records c2
                   WHERE c2.vehicle_id = c.vehicle_id AND c2.compliance_type = c.compliance_type
@@ -126,7 +124,7 @@ $renderNavBadge = function($count, $title) {
         <?php if ($authUser->hasPermission('maintenance.view')): ?>
             <li><a href="<?= $base ?>/modules/maintenance/index.php"
                     class="button <?= $isActive('/modules/maintenance') ?>" style="position: relative;"><i data-lucide="wrench"></i><span
-                        class="nav-label">Maintenance</span><?= $renderNavBadge($navBadges['maintenance'], 'Due/Overdue Services') ?></a></li>
+                        class="nav-label">Maintenance</span><?= $renderNavBadge($navBadges['maintenance'], 'Pending Maintenance') ?></a></li>
         <?php endif; ?>
         <?php if ($authUser->hasPermission('compliance.view')): ?>
             <li><a href="<?= $base ?>/modules/compliance/index.php"

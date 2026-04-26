@@ -86,7 +86,7 @@ require_once '../../includes/header.php';
     </div>
 </div>
 
-<form method="POST" style="max-width:720px;" class="needs-validation" novalidate>
+<form method="POST" class="needs-validation" novalidate>
     <?= csrfField() ?>
 
     <?php if ($error): ?>
@@ -97,147 +97,156 @@ require_once '../../includes/header.php';
         </div>
     <?php endif; ?>
 
-    <div class="card" style="margin-bottom:1.5rem;">
-        <div class="card-header">
-            <h2 class="card-title"><i data-lucide="building-2"
-                    style="width:16px;height:16px;margin-right:6px;vertical-align:-2px;color:var(--primary)"></i>Company
-                Details</h2>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 2rem; margin-bottom: 2rem;">
+        
+        <!-- Column 1: Company Details -->
+        <div style="display: flex; flex-direction: column; gap: 2rem;">
+            <div class="card" style="height: 100%;">
+                <div class="card-header">
+                    <h2 class="card-title"><i data-lucide="building-2"
+                            style="width:16px;height:16px;margin-right:6px;vertical-align:-2px;color:var(--primary)"></i>Company
+                        Details</h2>
+                </div>
+                <div class="card-body">
+                    <div class="form-group">
+                        <label for="company_name">Company Name <span style="color:var(--danger)">*</span></label>
+                        <input type="text" id="company_name" name="company_name" class="form-control" required
+                            value="<?= htmlspecialchars($data['company_name']) ?>"
+                            placeholder="e.g. GenSan Toyota Genuine Parts">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="business_type">Business Type</label>
+                            <select id="business_type" name="business_type" class="form-control">
+                                <?php foreach ($BIZ_TYPES as $v => $l): ?>
+                                    <option value="<?= $v ?>" <?= $data['business_type'] === $v ? 'selected' : '' ?>><?= $l ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="category">Category <span style="color:var(--danger)">*</span></label>
+                            <select id="category" name="category" class="form-control">
+                                <?php foreach ($CATEGORIES as $v => $l): ?>
+                                    <option value="<?= $v ?>" <?= $data['category'] === $v ? 'selected' : '' ?>><?= $l ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="tax_id">TIN / Tax ID</label>
+                        <input type="text" id="tax_id" name="tax_id" class="form-control"
+                            value="<?= htmlspecialchars($data['tax_id']) ?>" placeholder="e.g. 123-456-789-000">
+                    </div>
+                    <div class="form-group">
+                        <label for="address">Address</label>
+                        <input type="text" id="address" name="address" class="form-control"
+                            value="<?= htmlspecialchars($data['address']) ?>"
+                            placeholder="Street address">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="city">City</label>
+                            <input type="text" id="city" name="city" class="form-control"
+                                value="<?= htmlspecialchars($data['city']) ?>">
+                        </div>
+                        <div class="form-group">
+                            <label for="province">Province</label>
+                            <input type="text" id="province" name="province" class="form-control"
+                                value="<?= htmlspecialchars($data['province']) ?>">
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
-        <div class="card-body">
-            <div class="form-group">
-                <label for="company_name">Company Name <span style="color:var(--danger)">*</span></label>
-                <input type="text" id="company_name" name="company_name" class="form-control" required
-                    value="<?= htmlspecialchars($data['company_name']) ?>"
-                    placeholder="e.g. GenSan Toyota Genuine Parts">
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="business_type">Business Type</label>
-                    <select id="business_type" name="business_type" class="form-control">
-                        <?php foreach ($BIZ_TYPES as $v => $l): ?>
-                            <option value="<?= $v ?>" <?= $data['business_type'] === $v ? 'selected' : '' ?>><?= $l ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="category">Category <span style="color:var(--danger)">*</span></label>
-                    <select id="category" name="category" class="form-control">
-                        <?php foreach ($CATEGORIES as $v => $l): ?>
-                            <option value="<?= $v ?>" <?= $data['category'] === $v ? 'selected' : '' ?>><?= $l ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-            </div>
-            <div class="form-group">
-                <label for="tax_id">TIN / Tax ID</label>
-                <input type="text" id="tax_id" name="tax_id" class="form-control"
-                    value="<?= htmlspecialchars($data['tax_id']) ?>" placeholder="e.g. 123-456-789-000">
-            </div>
-            <div class="form-group">
-                <label for="address">Address</label>
-                <input type="text" id="address" name="address" class="form-control"
-                    value="<?= htmlspecialchars($data['address']) ?>"
-                    placeholder="Street address">
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="city">City</label>
-                    <input type="text" id="city" name="city" class="form-control"
-                        value="<?= htmlspecialchars($data['city']) ?>">
-                </div>
-                <div class="form-group">
-                    <label for="province">Province</label>
-                    <input type="text" id="province" name="province" class="form-control"
-                        value="<?= htmlspecialchars($data['province']) ?>">
-                </div>
-            </div>
-        </div>
-    </div>
 
-    <div class="card" style="margin-bottom:1.5rem;">
-        <div class="card-header">
-            <h2 class="card-title"><i data-lucide="contact"
-                    style="width:16px;height:16px;margin-right:6px;vertical-align:-2px;color:var(--primary)"></i>Contact
-                & Terms</h2>
-        </div>
-        <div class="card-body">
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="contact_person">Contact Person</label>
-                    <input type="text" id="contact_person" name="contact_person" class="form-control"
-                        value="<?= htmlspecialchars($data['contact_person']) ?>" placeholder="Full name">
+        <!-- Column 2: Contact & Terms -->
+        <div style="display: flex; flex-direction: column; gap: 2rem;">
+            <div class="card" style="height: 100%;">
+                <div class="card-header">
+                    <h2 class="card-title"><i data-lucide="contact"
+                            style="width:16px;height:16px;margin-right:6px;vertical-align:-2px;color:var(--primary)"></i>Contact
+                        & Terms</h2>
                 </div>
-                <div class="form-group">
-                    <label for="position">Position</label>
-                    <input type="text" id="position" name="position" class="form-control"
-                        value="<?= htmlspecialchars($data['position']) ?>" placeholder="e.g. Sales Manager">
+                <div class="card-body">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="contact_person">Contact Person</label>
+                            <input type="text" id="contact_person" name="contact_person" class="form-control"
+                                value="<?= htmlspecialchars($data['contact_person']) ?>" placeholder="Full name">
+                        </div>
+                        <div class="form-group">
+                            <label for="position">Position</label>
+                            <input type="text" id="position" name="position" class="form-control"
+                                value="<?= htmlspecialchars($data['position']) ?>" placeholder="e.g. Sales Manager">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="phone_primary">Primary Phone <span style="color:var(--danger)">*</span></label>
+                            <input type="text" id="phone_primary" name="phone_primary" class="form-control" required
+                                value="<?= htmlspecialchars($data['phone_primary']) ?>" placeholder="e.g. 0917-123-4567">
+                        </div>
+                        <div class="form-group">
+                            <label for="phone_secondary">Secondary Phone</label>
+                            <input type="text" id="phone_secondary" name="phone_secondary" class="form-control"
+                                value="<?= htmlspecialchars($data['phone_secondary']) ?>">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="email">Email</label>
+                            <input type="email" id="email" name="email" class="form-control"
+                                value="<?= htmlspecialchars($data['email']) ?>" placeholder="vendor@example.com">
+                        </div>
+                        <div class="form-group">
+                            <label for="website">Website</label>
+                            <input type="text" id="website" name="website" class="form-control"
+                                value="<?= htmlspecialchars($data['website']) ?>" placeholder="https://...">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="payment_terms">Payment Terms</label>
+                            <input type="text" id="payment_terms" name="payment_terms" class="form-control"
+                                value="<?= htmlspecialchars($data['payment_terms']) ?>" placeholder="e.g. Net 30, COD">
+                        </div>
+                        <div class="form-group">
+                            <label for="credit_limit">Credit Limit (₱)</label>
+                            <input type="number" id="credit_limit" name="credit_limit" class="form-control" min="0"
+                                step="0.01" value="<?= htmlspecialchars($data['credit_limit']) ?>" placeholder="0.00">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="lead_time_days">Avg. Lead Time (days)</label>
+                        <input type="number" id="lead_time_days" name="lead_time_days" class="form-control" min="0"
+                            value="<?= htmlspecialchars($data['lead_time_days']) ?>">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+                                <input type="checkbox" name="is_accredited" value="1"
+                                    <?= $data['is_accredited'] ? 'checked' : '' ?>
+                                    style="width:16px;height:16px;">
+                                Accredited Vendor
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+                                <input type="checkbox" name="is_active" value="1"
+                                    <?= $data['is_active'] ? 'checked' : '' ?>
+                                    style="width:16px;height:16px;">
+                                Active
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label for="notes">Notes</label>
+                        <textarea id="notes" name="notes" class="form-control"
+                            rows="2"><?= htmlspecialchars($data['notes']) ?></textarea>
+                    </div>
                 </div>
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="phone_primary">Primary Phone <span style="color:var(--danger)">*</span></label>
-                    <input type="text" id="phone_primary" name="phone_primary" class="form-control" required
-                        value="<?= htmlspecialchars($data['phone_primary']) ?>" placeholder="e.g. 0917-123-4567">
-                </div>
-                <div class="form-group">
-                    <label for="phone_secondary">Secondary Phone</label>
-                    <input type="text" id="phone_secondary" name="phone_secondary" class="form-control"
-                        value="<?= htmlspecialchars($data['phone_secondary']) ?>">
-                </div>
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="email">Email</label>
-                    <input type="email" id="email" name="email" class="form-control"
-                        value="<?= htmlspecialchars($data['email']) ?>" placeholder="vendor@example.com">
-                </div>
-                <div class="form-group">
-                    <label for="website">Website</label>
-                    <input type="text" id="website" name="website" class="form-control"
-                        value="<?= htmlspecialchars($data['website']) ?>" placeholder="https://...">
-                </div>
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="payment_terms">Payment Terms</label>
-                    <input type="text" id="payment_terms" name="payment_terms" class="form-control"
-                        value="<?= htmlspecialchars($data['payment_terms']) ?>" placeholder="e.g. Net 30, COD">
-                </div>
-                <div class="form-group">
-                    <label for="credit_limit">Credit Limit (₱)</label>
-                    <input type="number" id="credit_limit" name="credit_limit" class="form-control" min="0"
-                        step="0.01" value="<?= htmlspecialchars($data['credit_limit']) ?>" placeholder="0.00">
-                </div>
-            </div>
-            <div class="form-group">
-                <label for="lead_time_days">Avg. Lead Time (days)</label>
-                <input type="number" id="lead_time_days" name="lead_time_days" class="form-control" min="0"
-                    value="<?= htmlspecialchars($data['lead_time_days']) ?>">
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
-                        <input type="checkbox" name="is_accredited" value="1"
-                            <?= $data['is_accredited'] ? 'checked' : '' ?>
-                            style="width:16px;height:16px;">
-                        Accredited Vendor
-                    </label>
-                </div>
-                <div class="form-group">
-                    <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
-                        <input type="checkbox" name="is_active" value="1"
-                            <?= $data['is_active'] ? 'checked' : '' ?>
-                            style="width:16px;height:16px;">
-                        Active
-                    </label>
-                </div>
-            </div>
-            <div class="form-group" style="margin-bottom:0;">
-                <label for="notes">Notes</label>
-                <textarea id="notes" name="notes" class="form-control"
-                    rows="2"><?= htmlspecialchars($data['notes']) ?></textarea>
             </div>
         </div>
     </div>
@@ -247,6 +256,11 @@ require_once '../../includes/header.php';
             <i data-lucide="plus" style="width:16px;height:16px;"></i> Add Supplier
         </button>
         <a href="index.php" class="btn btn-secondary">Cancel</a>
+    </div>
+    
+    <div style="margin-top:1rem; padding:0.875rem 1rem; background:var(--info-light, #eff6ff); border-left:4px solid var(--primary); border-radius:var(--radius-md); font-size:0.85rem; color:var(--text-secondary); display:flex; align-items:flex-start; gap:0.5rem;">
+        <i data-lucide="info" style="width:16px;height:16px;flex-shrink:0;margin-top:1px;color:var(--primary)"></i>
+        <span><strong>Product Catalog:</strong> After saving this supplier, you will be able to manage their product catalog (add, edit, remove items from inventory) directly on the Edit Supplier page.</span>
     </div>
 </form>
 

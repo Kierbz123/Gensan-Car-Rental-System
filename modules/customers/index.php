@@ -223,6 +223,9 @@ function buildStatUrl($typeValue, $isBlacklist = false) {
                     <th>
                         <a href="<?= buildSortUrl('is_blacklisted', $currentSortBy, $currentSortOrder) ?>" class="sortable-header">Status <?= getSortIcon('is_blacklisted', $currentSortBy, $currentSortOrder) ?></a>
                     </th>
+                    <th>
+                        <a href="<?= buildSortUrl('created_at', $currentSortBy, $currentSortOrder) ?>" class="sortable-header">Date Added <?= getSortIcon('created_at', $currentSortBy, $currentSortOrder) ?></a>
+                    </th>
                     <th style="text-align:right;">Actions</th>
                 </tr>
             </thead>
@@ -261,6 +264,9 @@ function buildStatUrl($typeValue, $isBlacklist = false) {
                                 <?php else: ?>
                                     <span class="badge badge-success">Verified</span>
                                 <?php endif; ?>
+                            </td>
+                            <td style="font-size:0.8rem;color:var(--text-muted);white-space:nowrap;">
+                                <?= !empty($c['created_at']) ? date('M d, Y', strtotime($c['created_at'])) : '—' ?>
                             </td>
                             <td>
                                 <div class="table-actions" style="text-align:right;">

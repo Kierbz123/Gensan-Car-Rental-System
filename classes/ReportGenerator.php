@@ -202,16 +202,73 @@ class ReportGenerator
     }
 
     /**
-     * Get procurement history
+     * Get procurement history with filtering and pagination
      */
-    public function getProcurementHistory()
+    public function getProcurementHistory($filters = [], $page = 1, $perPage = 50)
     {
-        return $this->db->fetchAll(
-            "SELECT pr.*, u.username as requester 
+        $where = ["1=1"];
+        $params = [];
+
+        if (!empty($filters['search'])) {
+            $searchTerm = '%' . $filters['search'] . '%';
+            $where[] = "(pr.pr_number LIKE ? OR pr.purpose_summary LIKE ? OR u.first_name LIKE ? OR u.last_name LIKE ?)";
+            array_push($params, $searchTerm, $searchTerm, $searchTerm, $searchTerm);
+        }
+
+        if (!empty($filters['status'])) {
+            $where[] = "pr.status = ?";
+            $params[] = $filters['status'];
+        }
+
+        if (!empty($filters['date_from'])) {
+            $where[] = "DATE(pr.request_date) >= ?";
+            $params[] = $filters['date_from'];
+        }
+
+        if (!empty($filters['date_to'])) {
+            $where[] = "DATE(pr.request_date) <= ?";
+            $params[] = $filters['date_to'];
+        }
+
+        $whereClause = implode(' AND ', $where);
+
+        $count = $this->db->fetchColumn(
+            "SELECT COUNT(*) FROM procurement_requests pr 
+             LEFT JOIN users u ON pr.requestor_id = u.user_id 
+             WHERE {$whereClause}",
+            $params
+        );
+
+        $offset = ($page - 1) * $perPage;
+
+        $data = $this->db->fetchAll(
+            "SELECT pr.*, CONCAT(u.first_name, ' ', u.last_name) as requester 
              FROM procurement_requests pr
              LEFT JOIN users u ON pr.requestor_id = u.user_id
-             ORDER BY pr.created_at DESC"
+             WHERE {$whereClause}
+             ORDER BY pr.request_date DESC, pr.created_at DESC
+             LIMIT ? OFFSET ?",
+            array_merge($params, [$perPage, $offset])
         );
+        
+        $totals = $this->db->fetchOne(
+            "SELECT 
+                SUM(pr.total_estimated_cost) as total_spent,
+                COUNT(*) as total_records
+             FROM procurement_requests pr
+             LEFT JOIN users u ON pr.requestor_id = u.user_id
+             WHERE {$whereClause}",
+            $params
+        );
+
+        return [
+            'data' => $data,
+            'total' => $count,
+            'page' => $page,
+            'per_page' => $perPage,
+            'total_pages' => ceil($count / $perPage),
+            'totals' => $totals
+        ];
     }
 
     /**

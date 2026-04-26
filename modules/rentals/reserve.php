@@ -11,7 +11,7 @@ $db = Database::getInstance();
 $vehicles = $db->fetchAll("
     SELECT v.vehicle_id, v.plate_number, v.brand, v.model, v.year_model, v.daily_rental_rate, v.security_deposit_amount,
            (SELECT MIN(expiry_date) FROM compliance_records cr 
-            WHERE cr.vehicle_id = v.vehicle_id AND cr.status NOT IN ('pending', 'cancelled') AND cr.expiry_date IS NOT NULL) as min_expiry
+            WHERE cr.vehicle_id = v.vehicle_id AND cr.status NOT IN ('pending', 'cancelled', 'renewed') AND cr.expiry_date IS NOT NULL AND cr.expiry_date != '0000-00-00') as min_expiry
     FROM vehicles v
     WHERE v.current_status = ? AND v.deleted_at IS NULL
     ORDER BY v.brand, v.model",
@@ -200,6 +200,9 @@ $vehicleJsonMap = json_encode(array_map(fn($v) => [
     'deposit' => (float)$v['security_deposit_amount'],
     'comp'    => $v['compliance_status']
 ], $vehicles), JSON_HEX_TAG);
+
+// Pre-selected vehicle coming from "Deploy Asset" button on vehicle-details.php
+$preselectedVehicleId = trim($_GET['vehicle_id'] ?? '');
 ?>
 
 <style>
@@ -883,6 +886,18 @@ document.getElementById('reserveForm').addEventListener('submit', function (e) {
 // ── Init ─────────────────────────────────────────────────────────────────────
 recalculate();
 lucide.createIcons();
+
+// ── Auto-add pre-selected vehicle (from "Deploy Asset" on vehicle-details) ───
+(function () {
+    const preselected = <?= json_encode($preselectedVehicleId) ?>;
+    if (!preselected) return;
+    const picker = document.getElementById('vehicle-picker');
+    // Find the matching option in the picker
+    const targetOpt = Array.from(picker.options).find(o => o.value === preselected);
+    if (!targetOpt) return; // vehicle not available / not found
+    picker.value = preselected;
+    addFleetRow();
+})();
 
 const style = document.createElement('style');
 style.textContent = '@keyframes spin{to{transform:rotate(360deg)}}';

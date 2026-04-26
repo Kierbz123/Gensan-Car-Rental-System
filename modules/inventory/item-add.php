@@ -105,7 +105,7 @@ require_once '../../includes/header.php';
     </div>
 </div>
 
-<form method="POST" style="max-width:720px;" class="needs-validation" novalidate>
+<form method="POST" class="needs-validation" novalidate>
     <?= csrfField() ?>
 
     <?php if ($error): ?>
@@ -116,97 +116,106 @@ require_once '../../includes/header.php';
         </div>
     <?php endif; ?>
 
-    <div class="card" style="margin-bottom:1.5rem;">
-        <div class="card-header">
-            <h2 class="card-title"><i data-lucide="package"
-                    style="width:16px;height:16px;margin-right:6px;vertical-align:-2px;color:var(--primary)"></i>Item
-                Details</h2>
-        </div>
-        <div class="card-body">
-            <div class="form-row form-row--two">
-                <div class="form-group">
-                    <label for="item_code">Item Code / SKU</label>
-                    <div style="display:flex; gap:8px;">
-                        <input type="text" id="item_code" name="item_code" class="form-control" style="font-family:monospace; text-transform:uppercase;"
-                            value="<?= htmlspecialchars($data['item_code']) ?>" placeholder="e.g. INV-1001">
-                        <button type="button" class="btn btn-secondary" onclick="generateSKU()" style="white-space:nowrap; padding:0 12px; font-size:0.8125rem;">
-                            <i data-lucide="zap" style="width:14px;height:14px;margin-right:4px;"></i> Auto
-                        </button>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 2rem; margin-bottom: 2rem;">
+        
+        <!-- Column 1: Item Details -->
+        <div style="display: flex; flex-direction: column; gap: 2rem;">
+            <div class="card" style="height: 100%;">
+                <div class="card-header">
+                    <h2 class="card-title"><i data-lucide="package"
+                            style="width:16px;height:16px;margin-right:6px;vertical-align:-2px;color:var(--primary)"></i>Item
+                        Details</h2>
+                </div>
+                <div class="card-body">
+                    <div class="form-row form-row--two">
+                        <div class="form-group">
+                            <label for="item_code">Item Code / SKU</label>
+                            <div style="display:flex; gap:8px;">
+                                <input type="text" id="item_code" name="item_code" class="form-control" style="font-family:monospace; text-transform:uppercase;"
+                                    value="<?= htmlspecialchars($data['item_code']) ?>" placeholder="e.g. INV-1001">
+                                <button type="button" class="btn btn-secondary" onclick="generateSKU()" style="white-space:nowrap; padding:0 12px; font-size:0.8125rem;">
+                                    <i data-lucide="zap" style="width:14px;height:14px;margin-right:4px;"></i> Auto
+                                </button>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="item_name">Item Name <span style="color:var(--danger)">*</span></label>
+                            <input type="text" id="item_name" name="item_name" class="form-control" required
+                                value="<?= htmlspecialchars($data['item_name']) ?>" placeholder="e.g. Oil Filter (Honda)">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="item_category">Category</label>
+                            <select id="item_category" name="item_category" class="form-control">
+                                <?php foreach (['parts' => 'Parts', 'supplies' => 'Supplies', 'fuel' => 'Fuel', 'others' => 'Others'] as $v => $l): ?>
+                                    <option value="<?= $v ?>" <?= $data['item_category'] === $v ? 'selected' : '' ?>>
+                                        <?= $l ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="unit">Unit <span style="color:var(--danger)">*</span></label>
+                            <input type="text" id="unit" name="unit" class="form-control" required
+                                value="<?= htmlspecialchars($data['unit']) ?>" placeholder="pcs, liters, kg…">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="quantity_on_hand">Current Stock (Opening)</label>
+                            <input type="number" id="quantity_on_hand" name="quantity_on_hand" class="form-control" min="0"
+                                step="0.001" value="<?= htmlspecialchars($data['quantity_on_hand']) ?>">
+                        </div>
+                        <div class="form-group">
+                            <label for="reorder_level">Reorder Alert Level</label>
+                            <input type="number" id="reorder_level" name="reorder_level" class="form-control" min="0"
+                                step="0.001" value="<?= htmlspecialchars($data['reorder_level']) ?>">
+                        </div>
                     </div>
                 </div>
-                <div class="form-group">
-                    <label for="item_name">Item Name <span style="color:var(--danger)">*</span></label>
-                    <input type="text" id="item_name" name="item_name" class="form-control" required
-                        value="<?= htmlspecialchars($data['item_name']) ?>" placeholder="e.g. Oil Filter (Honda)">
-                </div>
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="item_category">Category</label>
-                    <select id="item_category" name="item_category" class="form-control">
-                        <?php foreach (['parts' => 'Parts', 'supplies' => 'Supplies', 'fuel' => 'Fuel', 'others' => 'Others'] as $v => $l): ?>
-                            <option value="<?= $v ?>" <?= $data['item_category'] === $v ? 'selected' : '' ?>>
-                                <?= $l ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="unit">Unit <span style="color:var(--danger)">*</span></label>
-                    <input type="text" id="unit" name="unit" class="form-control" required
-                        value="<?= htmlspecialchars($data['unit']) ?>" placeholder="pcs, liters, kg…">
-                </div>
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="quantity_on_hand">Current Stock (Opening)</label>
-                    <input type="number" id="quantity_on_hand" name="quantity_on_hand" class="form-control" min="0"
-                        step="0.001" value="<?= htmlspecialchars($data['quantity_on_hand']) ?>">
-                </div>
-                <div class="form-group">
-                    <label for="reorder_level">Reorder Alert Level</label>
-                    <input type="number" id="reorder_level" name="reorder_level" class="form-control" min="0"
-                        step="0.001" value="<?= htmlspecialchars($data['reorder_level']) ?>">
-                </div>
             </div>
         </div>
-    </div>
 
-    <div class="card" style="margin-bottom:1.5rem;">
-        <div class="card-header">
-            <h2 class="card-title"><i data-lucide="truck"
-                    style="width:16px;height:16px;margin-right:6px;vertical-align:-2px;color:var(--primary)"></i>Supplier
-                & Location</h2>
-        </div>
-        <div class="card-body">
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="unit_cost">Unit Cost (₱)</label>
-                    <input type="number" id="unit_cost" name="unit_cost" class="form-control" min="0" step="0.01"
-                        value="<?= htmlspecialchars($data['unit_cost']) ?>" placeholder="0.00">
+        <!-- Column 2: Supplier & Location -->
+        <div style="display: flex; flex-direction: column; gap: 2rem;">
+            <div class="card" style="height: 100%;">
+                <div class="card-header">
+                    <h2 class="card-title"><i data-lucide="truck"
+                            style="width:16px;height:16px;margin-right:6px;vertical-align:-2px;color:var(--primary)"></i>Supplier
+                        & Location</h2>
                 </div>
-                <div class="form-group">
-                    <label for="supplier_id">Primary Supplier</label>
-                    <select id="supplier_id" name="supplier_id" class="form-control">
-                        <option value="">— None —</option>
-                        <?php foreach ($suppliers as $s): ?>
-                            <option value="<?= $s['supplier_id'] ?>" <?= ($data['supplier_id'] == $s['supplier_id']) ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($s['company_name']) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
+                <div class="card-body">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="unit_cost">Unit Cost (₱)</label>
+                            <input type="number" id="unit_cost" name="unit_cost" class="form-control" min="0" step="0.01"
+                                value="<?= htmlspecialchars($data['unit_cost']) ?>" placeholder="0.00">
+                        </div>
+                        <div class="form-group">
+                            <label for="supplier_id">Primary Supplier</label>
+                            <select id="supplier_id" name="supplier_id" class="form-control">
+                                <option value="">— None —</option>
+                                <?php foreach ($suppliers as $s): ?>
+                                    <option value="<?= $s['supplier_id'] ?>" <?= ($data['supplier_id'] == $s['supplier_id']) ? 'selected' : '' ?>>
+                                        <?= htmlspecialchars($s['company_name']) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="storage_location">Storage Location</label>
+                        <input type="text" id="storage_location" name="storage_location" class="form-control"
+                            value="<?= htmlspecialchars($data['storage_location']) ?>"
+                            placeholder="e.g. Storage Room A, Tool Cabinet">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label for="notes">Notes</label>
+                        <textarea id="notes" name="notes" class="form-control"
+                            rows="2"><?= htmlspecialchars($data['notes']) ?></textarea>
+                    </div>
                 </div>
-            </div>
-            <div class="form-group">
-                <label for="storage_location">Storage Location</label>
-                <input type="text" id="storage_location" name="storage_location" class="form-control"
-                    value="<?= htmlspecialchars($data['storage_location']) ?>"
-                    placeholder="e.g. Storage Room A, Tool Cabinet">
-            </div>
-            <div class="form-group" style="margin-bottom:0;">
-                <label for="notes">Notes</label>
-                <textarea id="notes" name="notes" class="form-control"
-                    rows="2"><?= htmlspecialchars($data['notes']) ?></textarea>
             </div>
         </div>
     </div>

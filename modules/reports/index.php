@@ -20,7 +20,7 @@ require_once '../../includes/header.php';
     </div>
 </div>
 
-<div class="grid-2">
+<div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--space-4);">
     <!-- Fleet Analytics -->
     <div class="card">
         <div class="card-header">
@@ -103,19 +103,6 @@ require_once '../../includes/header.php';
                 </a>
             </div>
         </div>
-    </div>
-</div>
-
-<div class="card" style="margin-top:2rem; background:var(--primary); color:white; border:none; padding:2rem;">
-    <div style="display:flex; justify-content:space-between; align-items:center;">
-        <div>
-            <h3 style="font-size:1.25rem; font-weight:700; margin-bottom:0.5rem;">Instant Intelligence Report</h3>
-            <p style="opacity:0.8; font-size:0.875rem;">Generate a vectorized PDF snapshot of fleet health and active
-                contracts.</p>
-        </div>
-        <a href="export/export-pdf.php?type=fleet_utilization" target="_blank" class="btn btn-secondary">
-            <i data-lucide="file-text" style="width:16px;height:16px;"></i> Generate PDF
-        </a>
     </div>
 </div>
 
