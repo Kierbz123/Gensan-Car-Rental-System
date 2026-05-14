@@ -43,3 +43,6 @@ desktop.ini
 test*.php
 debug*.php
 check_*.php
+/scratch/
+/assets/uploads/managed_documents/*
+/assets/images/qr-codes/*

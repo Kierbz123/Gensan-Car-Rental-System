@@ -1,8 +1,7 @@
 <?php
 /**
  * GET /modules/ajax/get-notifications.php
- * Returns live, role-aware, priority-sorted system notifications as JSON.
- * Covers: maintenance, compliance, rentals, procurement, inventory.
+ * Returns categorized, aggregated system notifications.
  */
 require_once '../../config/config.php';
 require_once '../../includes/session-manager.php';
@@ -19,361 +18,229 @@ if (!$authUser->hasPermission('dashboard.view')) {
 
 try {
     $db   = Database::getInstance();
-    $role = $_SESSION['role'] ?? 'viewer';
-
     $items = [];
+    $badgeCount = 0;
 
-    /* ─────────────────────────────────────────────────────────────
-     * PRIORITY 0 — CRITICAL / DANGER
-     * ───────────────────────────────────────────────────────────── */
-
-    /* 0a. Overdue rentals (active but past return date) */
+    /* =====================================================================
+     * CATEGORY: RENTALS
+     * ===================================================================== */
+    // Overdue rentals
     $overdueRentals = $db->fetchAll(
         "SELECT ra.agreement_id, ra.agreement_number, ra.rental_end_date,
                 CONCAT(c.first_name,' ',c.last_name) AS customer_name,
-                v.plate_number, v.brand, v.model,
+                v.plate_number,
                 DATEDIFF(CURDATE(), DATE(ra.rental_end_date)) AS days_late
          FROM rental_agreements ra
          JOIN customers c  ON ra.customer_id = c.customer_id
          JOIN vehicles  v  ON ra.vehicle_id  = v.vehicle_id
-         WHERE ra.status = 'active'
-           AND DATE(ra.rental_end_date) < CURDATE()
-         ORDER BY ra.rental_end_date ASC
-         LIMIT 10"
+         WHERE ra.status = 'active' AND DATE(ra.rental_end_date) < CURDATE()
+         ORDER BY ra.rental_end_date ASC"
     );
     foreach ($overdueRentals as $r) {
-        $days = (int) $r['days_late'];
         $items[] = [
-            'id'       => 'rental-late-' . $r['agreement_id'],
-            'type'     => 'rental',
-            'priority' => 0,
+            'id' => 'rental-late-' . $r['agreement_id'],
+            'category' => 'rentals',
             'severity' => 'danger',
-            'icon'     => 'car',
-            'title'    => 'Rental Overdue',
-            'body'     => $r['agreement_number'] . ' — ' . $r['customer_name']
-                        . ' · ' . $r['plate_number'] . ' is overdue by ' . $days . ' day(s).',
-            'href'     => BASE_URL . 'modules/rentals/view.php?id=' . $r['agreement_id'],
-            'time'     => $r['rental_end_date'],
+            'icon' => 'alert-circle',
+            'title' => 'Rental Overdue',
+            'body' => "{$r['agreement_number']} ({$r['plate_number']}) is {$r['days_late']} day(s) late.",
+            'href' => BASE_URL . "modules/rentals/view.php?id={$r['agreement_id']}",
+            'time' => $r['rental_end_date'],
         ];
+        $badgeCount++;
     }
 
-    /* 0b. Breached compliance (expired instruments) */
-    $breached = $db->fetchAll(
-        "SELECT cr.record_id, v.plate_number, v.brand, v.model,
-                cr.compliance_type, cr.expiry_date,
-                ABS(DATEDIFF(CURDATE(), cr.expiry_date)) AS days_lapsed,
-                cr.vehicle_id
-         FROM compliance_records cr
-         JOIN vehicles v ON cr.vehicle_id = v.vehicle_id
-         WHERE cr.expiry_date < CURDATE()
-           AND cr.expiry_date != '0000-00-00'
-           AND v.deleted_at IS NULL
-           AND cr.status NOT IN ('renewed','cancelled')
-           AND cr.record_id = (
-               SELECT MAX(r2.record_id)
-               FROM compliance_records r2
-               WHERE r2.vehicle_id = cr.vehicle_id
-                 AND r2.compliance_type = cr.compliance_type
-           )
-         ORDER BY cr.expiry_date ASC
-         LIMIT 10"
-    );
-    foreach ($breached as $r) {
-        $items[] = [
-            'id'       => 'comp-breach-' . $r['record_id'],
-            'type'     => 'compliance',
-            'priority' => 0,
-            'severity' => 'danger',
-            'icon'     => 'shield-x',
-            'title'    => 'Compliance Breached',
-            'body'     => strtoupper(str_replace('_', ' ', $r['compliance_type']))
-                        . ' for ' . $r['plate_number'] . ' lapsed '
-                        . $r['days_lapsed'] . ' day(s) ago.',
-            'href'     => BASE_URL . 'modules/compliance/renew-upload.php?vehicle_id='
-                        . urlencode($r['vehicle_id']) . '&type=' . urlencode($r['compliance_type']),
-            'time'     => $r['expiry_date'],
-        ];
-    }
-
-    /* 0c. Overdue maintenance schedules */
-    $maintOverdue = $db->fetchAll(
-        "SELECT ms.schedule_id, v.plate_number, v.brand, v.model,
-                ms.service_type, ms.next_due_date,
-                DATEDIFF(CURDATE(), ms.next_due_date) AS days_overdue
-         FROM maintenance_schedules ms
-         JOIN vehicles v ON ms.vehicle_id = v.vehicle_id
-         WHERE ms.status = 'overdue'
-           AND ms.next_due_date < CURDATE()
-         ORDER BY ms.next_due_date ASC
-         LIMIT 10"
-    );
-    foreach ($maintOverdue as $r) {
-        $items[] = [
-            'id'       => 'maint-overdue-' . $r['schedule_id'],
-            'type'     => 'maintenance',
-            'priority' => 0,
-            'severity' => 'danger',
-            'icon'     => 'wrench',
-            'title'    => 'Overdue Maintenance',
-            'body'     => trim($r['brand'] . ' ' . $r['model']) . ' (' . $r['plate_number'] . ') — '
-                        . str_replace('_', ' ', ucfirst($r['service_type']))
-                        . ' is ' . $r['days_overdue'] . ' day(s) overdue.',
-            'href'     => BASE_URL . 'modules/maintenance/service-view.php?id=' . $r['schedule_id'],
-            'time'     => $r['next_due_date'],
-        ];
-    }
-
-    /* ─────────────────────────────────────────────────────────────
-     * PRIORITY 1 — WARNING
-     * ───────────────────────────────────────────────────────────── */
-
-    /* 1a. Rentals due today */
-    $dueToday = $db->fetchAll(
-        "SELECT ra.agreement_id, ra.agreement_number, ra.rental_end_date,
+    // Active/Confirmed rentals (to match sidebar "1")
+    $activeRentals = $db->fetchAll(
+        "SELECT ra.agreement_id, ra.agreement_number, ra.status,
                 CONCAT(c.first_name,' ',c.last_name) AS customer_name,
-                v.plate_number, v.brand, v.model
+                v.plate_number
          FROM rental_agreements ra
-         JOIN customers c  ON ra.customer_id = c.customer_id
-         JOIN vehicles  v  ON ra.vehicle_id  = v.vehicle_id
-         WHERE ra.status = 'active'
-           AND DATE(ra.rental_end_date) = CURDATE()
-         ORDER BY ra.rental_end_date ASC
-         LIMIT 5"
-    );
-    foreach ($dueToday as $r) {
-        $items[] = [
-            'id'       => 'rental-today-' . $r['agreement_id'],
-            'type'     => 'rental',
-            'priority' => 1,
-            'severity' => 'warning',
-            'icon'     => 'car',
-            'title'    => 'Rental Due Today',
-            'body'     => $r['agreement_number'] . ' — ' . $r['customer_name']
-                        . ' · ' . $r['plate_number'] . ' is due for return today.',
-            'href'     => BASE_URL . 'modules/rentals/view.php?id=' . $r['agreement_id'],
-            'time'     => $r['rental_end_date'],
-        ];
-    }
-
-    /* 1b. Compliance expiring within 7 days (not yet breached) */
-    $expiring7 = $db->fetchAll(
-        "SELECT cr.record_id, v.plate_number, v.brand, v.model,
-                cr.compliance_type, cr.expiry_date,
-                DATEDIFF(cr.expiry_date, CURDATE()) AS days_left,
-                cr.vehicle_id
-         FROM compliance_records cr
-         JOIN vehicles v ON cr.vehicle_id = v.vehicle_id
-         WHERE cr.expiry_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)
-           AND cr.expiry_date != '0000-00-00'
-           AND v.deleted_at IS NULL
-           AND cr.status NOT IN ('renewed','cancelled')
-           AND cr.record_id = (
-               SELECT MAX(r2.record_id)
-               FROM compliance_records r2
-               WHERE r2.vehicle_id = cr.vehicle_id
-                 AND r2.compliance_type = cr.compliance_type
-           )
-         ORDER BY cr.expiry_date ASC
+         JOIN customers c ON ra.customer_id = c.customer_id
+         JOIN vehicles v ON ra.vehicle_id = v.vehicle_id
+         WHERE ra.status IN ('confirmed', 'active') AND DATE(ra.rental_end_date) >= CURDATE()
          LIMIT 10"
     );
-    foreach ($expiring7 as $r) {
+    foreach ($activeRentals as $r) {
         $items[] = [
-            'id'       => 'comp-warn-' . $r['record_id'],
-            'type'     => 'compliance',
-            'priority' => 1,
-            'severity' => 'warning',
-            'icon'     => 'shield-alert',
-            'title'    => 'Compliance Expiring Soon',
-            'body'     => strtoupper(str_replace('_', ' ', $r['compliance_type']))
-                        . ' for ' . $r['plate_number'] . ' expires in ' . $r['days_left'] . ' day(s).',
-            'href'     => BASE_URL . 'modules/compliance/renew-upload.php?vehicle_id='
-                        . urlencode($r['vehicle_id']) . '&type=' . urlencode($r['compliance_type']),
-            'time'     => $r['expiry_date'],
-        ];
-    }
-
-    /* 1c. Vehicles stuck in maintenance > 3 days */
-    $stuckMaint = $db->fetchAll(
-        "SELECT ml.log_id, v.plate_number, v.brand, v.model,
-                ml.service_type, ml.service_date,
-                DATEDIFF(CURDATE(), ml.service_date) AS days_in
-         FROM maintenance_logs ml
-         JOIN vehicles v ON ml.vehicle_id = v.vehicle_id
-         WHERE ml.status = 'in_progress'
-           AND ml.service_date <= DATE_SUB(CURDATE(), INTERVAL 3 DAY)
-         ORDER BY ml.service_date ASC
-         LIMIT 5"
-    );
-    foreach ($stuckMaint as $r) {
-        $items[] = [
-            'id'       => 'mlog-stuck-' . $r['log_id'],
-            'type'     => 'maintenance',
-            'priority' => 1,
-            'severity' => 'warning',
-            'icon'     => 'alert-triangle',
-            'title'    => 'Vehicle Still in Maintenance',
-            'body'     => $r['plate_number'] . ' (' . trim($r['brand'] . ' ' . $r['model']) . ') has been in '
-                        . str_replace('_', ' ', $r['service_type']) . ' for ' . $r['days_in'] . ' days.',
-            'href'     => BASE_URL . 'modules/maintenance/index.php?status=in_progress',
-            'time'     => $r['service_date'],
-        ];
-    }
-
-    /* ─────────────────────────────────────────────────────────────
-     * PRIORITY 2 — INFO / ACTIONABLE
-     * ───────────────────────────────────────────────────────────── */
-
-    /* 2a. Compliance expiring 8–30 days (lower urgency) */
-    $expiring30 = $db->fetchAll(
-        "SELECT cr.record_id, v.plate_number, v.brand, v.model,
-                cr.compliance_type, cr.expiry_date,
-                DATEDIFF(cr.expiry_date, CURDATE()) AS days_left,
-                cr.vehicle_id
-         FROM compliance_records cr
-         JOIN vehicles v ON cr.vehicle_id = v.vehicle_id
-         WHERE cr.expiry_date BETWEEN DATE_ADD(CURDATE(), INTERVAL 8 DAY)
-                                  AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)
-           AND cr.expiry_date != '0000-00-00'
-           AND v.deleted_at IS NULL
-           AND cr.status NOT IN ('renewed','cancelled')
-           AND cr.record_id = (
-               SELECT MAX(r2.record_id)
-               FROM compliance_records r2
-               WHERE r2.vehicle_id = cr.vehicle_id
-                 AND r2.compliance_type = cr.compliance_type
-           )
-         ORDER BY cr.expiry_date ASC
-         LIMIT 5"
-    );
-    foreach ($expiring30 as $r) {
-        $items[] = [
-            'id'       => 'comp-info-' . $r['record_id'],
-            'type'     => 'compliance',
-            'priority' => 2,
+            'id' => 'rental-active-' . $r['agreement_id'],
+            'category' => 'rentals',
             'severity' => 'info',
-            'icon'     => 'shield-alert',
-            'title'    => 'Compliance Expiring',
-            'body'     => strtoupper(str_replace('_', ' ', $r['compliance_type']))
-                        . ' for ' . $r['plate_number'] . ' expires in ' . $r['days_left'] . ' day(s).',
-            'href'     => BASE_URL . 'modules/compliance/renew-upload.php?vehicle_id='
-                        . urlencode($r['vehicle_id']) . '&type=' . urlencode($r['compliance_type']),
-            'time'     => $r['expiry_date'],
+            'icon' => 'car',
+            'title' => 'Ongoing Rental',
+            'body' => "{$r['agreement_number']} is currently " . strtoupper($r['status']) . ".",
+            'href' => BASE_URL . "modules/rentals/view.php?id={$r['agreement_id']}",
+            'time' => date('Y-m-d H:i:s'),
         ];
+        // Only increment badge if it's 'confirmed' (needs dispatch) or if user wants all
+        $badgeCount++; 
     }
 
-    /* 2b. Pending Maintenance (All scheduled/pending items not overdue) */
-    $maintScheduled = $db->fetchAll(
-        "SELECT ms.schedule_id, v.plate_number, v.brand, v.model,
-                ms.service_type, ms.next_due_date,
-                DATEDIFF(ms.next_due_date, CURDATE()) AS days_until
+    /* =====================================================================
+     * CATEGORY: MAINTENANCE
+     * ===================================================================== */
+    // Individual Maintenance items (to show all 13)
+    $allMaint = $db->fetchAll(
+        "SELECT ms.schedule_id, v.plate_number, ms.service_type, ms.status, ms.next_due_date
          FROM maintenance_schedules ms
          JOIN vehicles v ON ms.vehicle_id = v.vehicle_id
-         WHERE ms.status != 'completed' AND ms.status != 'overdue'
-         ORDER BY ms.next_due_date ASC
-         LIMIT 20"
+         WHERE ms.status != 'completed'
+         ORDER BY ms.next_due_date ASC"
     );
-    foreach ($maintScheduled as $r) {
-        $daysUntil = $r['days_until'] ?? 0;
-        $timeText = ($daysUntil > 0) ? "due in {$daysUntil} day(s)" : "due now";
-        
+    foreach ($allMaint as $m) {
+        $severity = $m['status'] === 'overdue' ? 'danger' : 'warning';
+        $type = str_replace('_', ' ', ucfirst($m['service_type']));
         $items[] = [
-            'id'       => 'maint-sched-' . $r['schedule_id'],
-            'type'     => 'maintenance',
-            'priority' => 2,
-            'severity' => 'info',
-            'icon'     => 'wrench',
-            'title'    => 'Pending Maintenance',
-            'body'     => trim($r['brand'] . ' ' . $r['model']) . ' (' . $r['plate_number'] . ') — '
-                        . str_replace('_', ' ', ucfirst($r['service_type']))
-                        . ' is ' . $timeText . '.',
-            'href'     => BASE_URL . 'modules/maintenance/service-view.php?id=' . $r['schedule_id'],
-            'time'     => $r['next_due_date'],
+            'id' => 'maint-item-' . $m['schedule_id'],
+            'category' => 'maintenance',
+            'severity' => $severity,
+            'icon' => 'wrench',
+            'title' => $severity === 'danger' ? 'Overdue Maintenance' : 'Scheduled Maintenance',
+            'body' => "{$m['plate_number']} needs {$type} (" . ucfirst($m['status']) . ").",
+            'href' => BASE_URL . "modules/maintenance/index.php",
+            'time' => $m['next_due_date'],
         ];
+        $badgeCount++;
     }
 
-    /* 2c. Pending PRs awaiting approval (procurement roles only) */
-    if (in_array($role, ['system_admin', 'fleet_manager', 'procurement_officer'])) {
-        $prs = $db->fetchAll(
-            "SELECT pr_id, pr_number, purpose_summary, created_at
-             FROM procurement_requests
-             WHERE status = 'pending_approval'
-             ORDER BY created_at ASC
-             LIMIT 5"
-        );
-        foreach ($prs as $p) {
-            $items[] = [
-                'id'       => 'pr-pending-' . $p['pr_id'],
-                'type'     => 'procurement',
-                'priority' => 2,
-                'severity' => 'info',
-                'icon'     => 'clipboard-list',
-                'title'    => 'PR Awaiting Approval',
-                'body'     => $p['pr_number'] . ' — ' . ($p['purpose_summary'] ?? 'Pending approval.'),
-                'href'     => BASE_URL . 'modules/procurement/pr-view.php?id=' . $p['pr_id'],
-                'time'     => $p['created_at'],
-            ];
-        }
+    /* =====================================================================
+     * CATEGORY: PROCUREMENT
+     * ===================================================================== */
+    // Pending Approval
+    $pendingPrs = $db->fetchAll("SELECT pr_id, pr_number FROM procurement_requests WHERE status = 'pending_approval'");
+    foreach ($pendingPrs as $pr) {
+        $items[] = [
+            'id' => 'pr-appr-' . $pr['pr_id'],
+            'category' => 'procurement',
+            'severity' => 'warning',
+            'icon' => 'file-text',
+            'title' => 'PR Pending Approval',
+            'body' => "Request {$pr['pr_number']} is awaiting authorization.",
+            'href' => BASE_URL . "modules/procurement/pr-view.php?id={$pr['pr_id']}",
+            'time' => date('Y-m-d H:i:s'),
+        ];
+        $badgeCount++;
     }
 
-    /* 2d. Low stock items */
-    try {
-        $lowStock = $db->fetchAll(
-            "SELECT item_id, item_name, quantity_on_hand, reorder_level
-             FROM parts_inventory
-             WHERE reorder_level > 0 AND quantity_on_hand <= reorder_level
-             ORDER BY quantity_on_hand ASC
-             LIMIT 3"
-        );
-        foreach ($lowStock as $s) {
-            $items[] = [
-                'id'       => 'stock-' . $s['item_id'],
-                'type'     => 'inventory',
-                'priority' => 2,
-                'severity' => 'info',
-                'icon'     => 'package',
-                'title'    => 'Low Stock Alert',
-                'body'     => htmlspecialchars($s['item_name']) . ' — only '
-                            . $s['quantity_on_hand'] . ' left (reorder at ' . $s['reorder_level'] . ').',
-                'href'     => BASE_URL . 'modules/inventory/index.php?low_stock=1',
-                'time'     => null,
-            ];
-        }
-    } catch (Throwable $ignored) {
-        // parts_inventory table may not exist yet
+    // Awaiting PO Generation (8)
+    $awaitingPo = $db->fetchAll("SELECT pr_id, pr_number FROM procurement_requests WHERE status = 'approved' AND po_number IS NULL");
+    foreach ($awaitingPo as $pr) {
+        $items[] = [
+            'id' => 'pr-po-' . $pr['pr_id'],
+            'category' => 'procurement',
+            'severity' => 'info',
+            'icon' => 'shopping-cart',
+            'title' => 'Awaiting PO Generation',
+            'body' => "Approved request {$pr['pr_number']} needs a Purchase Order generated.",
+            'href' => BASE_URL . "modules/procurement/po-generate.php?pr_id={$pr['pr_id']}",
+            'time' => date('Y-m-d H:i:s'),
+        ];
+        $badgeCount++;
     }
 
-    /* ─────────────────────────────────────────────────────────────
-     * Sort: priority ASC (0=critical first), then severity within group
-     * ───────────────────────────────────────────────────────────── */
+    /* =====================================================================
+     * CATEGORY: INVENTORY
+     * ===================================================================== */
+    // Pending Storage (6)
+    $pendingStorage = $db->fetchAll(
+        "SELECT pi.item_id, pi.item_description, pr.pr_number 
+         FROM procurement_items pi 
+         JOIN procurement_requests pr ON pi.pr_id = pr.pr_id
+         WHERE pi.inventory_status = 'pending'"
+    );
+    foreach ($pendingStorage as $ps) {
+        $items[] = [
+            'id' => 'inv-store-' . $ps['item_id'],
+            'category' => 'inventory',
+            'severity' => 'warning',
+            'icon' => 'inbox',
+            'title' => 'Pending Storage',
+            'body' => "{$ps['item_description']} (from {$ps['pr_number']}) is waiting to be stored.",
+            'href' => BASE_URL . "modules/inventory/index.php",
+            'time' => date('Y-m-d H:i:s'),
+        ];
+        $badgeCount++;
+    }
+
+    // Low Stock
+    $lowStock = $db->fetchAll("SELECT inventory_id, item_name, quantity_on_hand FROM parts_inventory WHERE reorder_level > 0 AND quantity_on_hand <= reorder_level");
+    foreach ($lowStock as $ls) {
+        $items[] = [
+            'id' => 'inv-low-' . $ls['inventory_id'],
+            'category' => 'inventory',
+            'severity' => 'danger',
+            'icon' => 'package',
+            'title' => 'Low Stock Alert',
+            'body' => "{$ls['item_name']} is low on stock ({$ls['quantity_on_hand']} left).",
+            'href' => BASE_URL . "modules/inventory/index.php?low_stock=1",
+            'time' => date('Y-m-d H:i:s'),
+        ];
+        $badgeCount++;
+    }
+
+    /* =====================================================================
+     * CATEGORY: COMPLIANCE
+     * ===================================================================== */
+    $compRecords = $db->fetchAll("
+        SELECT c.record_id, v.plate_number, c.compliance_type, c.expiry_date
+        FROM compliance_records c 
+        JOIN vehicles v ON c.vehicle_id = v.vehicle_id
+        WHERE c.expiry_date <= DATE_ADD(CURRENT_DATE(), INTERVAL 7 DAY) 
+          AND c.expiry_date != '0000-00-00'
+          AND c.status NOT IN ('renewed', 'cancelled')
+          AND v.deleted_at IS NULL
+          AND c.record_id = (SELECT MAX(record_id) FROM compliance_records c2 WHERE c2.vehicle_id = c.vehicle_id AND c2.compliance_type = c.compliance_type)
+    ");
+    foreach ($compRecords as $cr) {
+        $items[] = [
+            'id' => 'comp-' . $cr['record_id'],
+            'category' => 'compliance',
+            'severity' => 'danger',
+            'icon' => 'shield-alert',
+            'title' => 'Compliance Alert',
+            'body' => strtoupper(str_replace('_', ' ', $cr['compliance_type'])) . " for {$cr['plate_number']} is expiring soon/expired.",
+            'href' => BASE_URL . "modules/compliance/index.php",
+            'time' => $cr['expiry_date'],
+        ];
+        $badgeCount++;
+    }
+
+    /* =====================================================================
+     * CATEGORY: DATABASE NOTIFICATIONS
+     * ===================================================================== */
+    $dbNotifs = $db->fetchAll("SELECT * FROM notifications WHERE user_id = ? AND is_read = 0 ORDER BY created_at DESC LIMIT 10", [$authUser->getId()]);
+    foreach ($dbNotifs as $n) {
+        $items[] = [
+            'id' => 'db-' . $n['notification_id'],
+            'category' => $n['related_module'] ?: 'all',
+            'severity' => 'info',
+            'icon' => 'bell',
+            'title' => $n['title'],
+            'body' => $n['message'],
+            'href' => $n['related_url'] ? BASE_URL . $n['related_url'] : '#',
+            'time' => $n['created_at'],
+        ];
+        $badgeCount++;
+    }
+
+    // Sort by severity (danger > warning > info), then by time DESC
     $sevOrder = ['danger' => 0, 'warning' => 1, 'info' => 2];
     usort($items, function ($a, $b) use ($sevOrder) {
-        if ($a['priority'] !== $b['priority']) {
-            return $a['priority'] <=> $b['priority'];
+        if ($sevOrder[$a['severity']] !== $sevOrder[$b['severity']]) {
+            return $sevOrder[$a['severity']] <=> $sevOrder[$b['severity']];
         }
-        return ($sevOrder[$a['severity']] ?? 9) <=> ($sevOrder[$b['severity']] ?? 9);
+        return strtotime($b['time']) <=> strtotime($a['time']);
     });
 
-    // Remove internal 'priority' key before output
-    $output = array_map(function ($item) {
-        unset($item['priority']);
-        return $item;
-    }, $items);
-
-    $total  = count($output);
-    $capped = array_slice($output, 0, 25);
-
     echo json_encode([
-        'success'      => true,
-        'unread'       => $total,
-        'total'        => $total,
-        'notifications' => $capped,
-        'generated_at' => date('Y-m-d H:i:s'),
+        'success'        => true,
+        'critical_count' => $badgeCount,
+        'total'          => count($items),
+        'notifications'  => $items,
+        'generated_at'   => date('Y-m-d H:i:s'),
     ], JSON_UNESCAPED_UNICODE);
 
 } catch (Throwable $e) {
     http_response_code(500);
-    echo json_encode([
-        'success' => false,
-        'error'   => defined('DEBUG_MODE') && DEBUG_MODE ? $e->getMessage() : 'System error',
-    ]);
+    echo json_encode(['success' => false, 'error' => $e->getMessage()]);
 }

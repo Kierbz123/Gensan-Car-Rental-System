@@ -95,9 +95,9 @@ $pageTitle = '404 Not Found';
 
 <body>
     <div class="error-container">
-        <div class="error-code">404</div>
-        <h1 class="error-title">Page Not Found</h1>
-        <p class="error-message">The page you're looking for doesn't exist or has been moved. Please check the URL or
+        <div class="error-code">401</div>
+        <h1 class="error-title">Not Authorized</h1>
+        <p class="error-message">You are not authorized to view this page. Please check your credentials or
             navigate back to the dashboard.</p>
         <a class="btn" href="<?= BASE_URL ?>modules/dashboard/index.php">← Back to Dashboard</a>
     </div>

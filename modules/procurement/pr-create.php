@@ -47,6 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'quantity' => max(1, (int) ($item['quantity'] ?? 1)),
                 'unit' => trim($item['unit'] ?? 'piece'),
                 'estimated_unit_price' => max(0, (float) ($item['estimated_unit_price'] ?? 0)),
+                'supplier_id' => !empty($item['supplier_id']) ? (int)$item['supplier_id'] : null,
             ];
         }
         if (empty($items))
@@ -68,7 +69,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             'specification' => $item['specification'] ?? null,
                             'quantity' => $item['quantity'],
                             'unit' => $item['unit'],
-                            'estimated_unit_cost' => $item['estimated_unit_price']
+                            'estimated_unit_cost' => $item['estimated_unit_price'],
+                            'supplier_id' => $item['supplier_id'] ?? null
                         ];
                     }, $items)
                 ];
@@ -181,8 +183,12 @@ require_once '../../includes/header.php';
                             <label>Browse Supplier Catalog (Optional)</label>
                             <select id="supplier_select" class="form-control" onchange="fetchSupplierProducts(this.value)">
                                 <option value="">-- Choose a Supplier to view their products --</option>
-                                <?php foreach ($activeSuppliers as $sup): ?>
-                                    <option value="<?= $sup['supplier_id'] ?>"><?= htmlspecialchars($sup['company_name'] . ' (' . $sup['supplier_code'] . ')') ?></option>
+                                <?php 
+                                $preselectedSupplierId = $_GET['supplier_id'] ?? '';
+                                foreach ($activeSuppliers as $sup): 
+                                    $isSelected = ($sup['supplier_id'] == $preselectedSupplierId) ? 'selected' : '';
+                                ?>
+                                    <option value="<?= $sup['supplier_id'] ?>" <?= $isSelected ?>><?= htmlspecialchars($sup['company_name'] . ' (' . $sup['supplier_code'] . ')') ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
@@ -196,7 +202,6 @@ require_once '../../includes/header.php';
                                             <th>Product Name</th>
                                             <th>Category</th>
                                             <th>Unit Cost</th>
-                                            <th>Available Stock</th>
                                             <th style="width: 120px;">Quantity</th>
                                             <th>Action</th>
                                         </tr>
@@ -343,11 +348,11 @@ require_once '../../includes/header.php';
                 if (data.success) {
                     renderSupplierProducts(data.data);
                 } else {
-                    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--danger);">${data.error || 'Failed to load products.'}</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--danger);">${data.error || 'Failed to load products.'}</td></tr>`;
                 }
             })
             .catch(err => {
-                tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--danger);">Error connecting to server.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--danger);">Error connecting to server.</td></tr>`;
                 console.error(err);
             });
     }
@@ -355,21 +360,19 @@ require_once '../../includes/header.php';
     function renderSupplierProducts(products) {
         const tbody = document.getElementById('supplier-products-tbody');
         if (!products || products.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted);">This supplier has no mapped products in inventory.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--text-muted);">This supplier has no mapped products in their catalog.</td></tr>';
             return;
         }
         
         let html = '';
         products.forEach(p => {
-            const stockColor = p.quantity_on_hand <= p.reorder_level ? 'var(--danger)' : 'var(--text-success)';
             html += `
                 <tr>
                     <td style="font-weight:600;">${p.item_name}</td>
                     <td><span class="badge badge-secondary" style="text-transform:capitalize;">${p.item_category.replace(/_/g, ' ')}</span></td>
                     <td style="font-weight:500;">₱${Number(p.unit_cost || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
-                    <td style="color:${stockColor}; font-weight:600;">${p.quantity_on_hand} ${p.unit}</td>
                     <td>
-                        <input type="number" id="sup-qty-${p.inventory_id}" class="form-control form-control-sm" value="1" min="1" style="width: 80px; text-align:center;">
+                        <input type="number" id="sup-qty-${p.catalog_id}" class="form-control form-control-sm" value="1" min="1" style="width: 80px; text-align:center;">
                     </td>
                     <td>
                         <button type="button" class="btn btn-sm btn-primary" onclick='addSupplierProductToRequest(${JSON.stringify(p).replace(/'/g, "&#39;")})' style="display:flex;align-items:center;gap:4px;">
@@ -384,16 +387,17 @@ require_once '../../includes/header.php';
     }
     
     function addSupplierProductToRequest(product) {
-        const qtyInput = document.getElementById(`sup-qty-${product.inventory_id}`);
+        const qtyInput = document.getElementById(`sup-qty-${product.catalog_id}`);
         const qty = qtyInput ? qtyInput.value : 1;
         
         const c = document.getElementById('items-container');
         const i = itemIdx++;
         
-        const spec = `Supplier Item Code: ${product.item_code} | Cat: ${product.item_category}`;
+        const spec = product.vendor_item_code ? `Vendor Code: ${product.vendor_item_code}` : `From Supplier Catalog`;
         
         const newRowHTML = `
         <div class="item-row" style="display: grid; grid-template-columns: 2fr 2fr 1fr 1fr 1.5fr auto; gap: 1rem; align-items: end; padding: 1.5rem; background: var(--primary-50); border-radius: var(--radius-md); border: 1px solid var(--primary-100); transition: all 0.3s; animation: highlightRow 1.5s ease;">
+            <input type="hidden" name="items[${i}][supplier_id]" value="${product.supplier_id}">
             <div class="form-group"><label>Item Name *</label><input type="text" name="items[${i}][item_name]" class="form-control" value="${product.item_name.replace(/"/g, '&quot;')}" required readonly style="background:var(--bg-muted);"></div>
             <div class="form-group"><label>Specification</label><input type="text" name="items[${i}][specification]" class="form-control" value="${spec.replace(/"/g, '&quot;')}"></div>
             <div class="form-group"><label>Qty</label><input type="number" name="items[${i}][quantity]" class="form-control" value="${qty}" min="1" style="text-align: center;"></div>
@@ -430,6 +434,22 @@ require_once '../../includes/header.php';
             setTimeout(() => toast.remove(), 300);
         }, 3000);
     }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const supplierSelect = document.getElementById('supplier_select');
+        if (supplierSelect && supplierSelect.value) {
+            // Automatically fetch the catalog for the pre-selected supplier
+            fetchSupplierProducts(supplierSelect.value);
+            
+            // Smoothly scroll down to the catalog
+            setTimeout(() => {
+                const card = document.getElementById('supplier-selection-card');
+                if (card) {
+                    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }, 300);
+        }
+    });
 </script>
 <style>
 @keyframes spin { 100% { transform: rotate(360deg); } }

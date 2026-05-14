@@ -144,10 +144,10 @@ $renderNavBadge = function($count, $title) {
             <li><a href="<?= $base ?>/modules/settings/index.php" class="button <?= $isActive('/modules/settings') ?>"><i
                         data-lucide="settings"></i><span class="nav-label">Settings</span></a></li>
         <?php endif; ?>
-        <?php if ($authUser->getData()['role'] === 'system_admin'): ?>
+        <?php /* if ($authUser->getData()['role'] === 'system_admin'): ?>
             <li><a href="<?= $base ?>/modules/backups/index.php" class="button <?= $isActive('/modules/backups') ?>"><i
                         data-lucide="database"></i><span class="nav-label">Backups</span></a></li>
-        <?php endif; ?>
+        <?php endif; */ ?>
         <li style="margin-top:auto;">
             <hr>
         </li>

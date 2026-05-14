@@ -356,11 +356,7 @@ require_once '../../includes/header.php';
                     </a>
                 <?php endif; ?>
 
-                <?php if ($balanceOwing > 0 && $authUser->hasPermission('rentals.update')): ?>
-                    <button onclick="openPaymentModal()" class="btn btn-primary" style="justify-content:center;">
-                        <i data-lucide="credit-card" style="width:16px;height:16px;"></i> Record Payment
-                    </button>
-                <?php endif; ?>
+
 
                 <?php if (in_array($rental['status'], ['reserved','confirmed','active']) && $authUser->hasPermission('rentals.update')): ?>
                     <button type="button" onclick="openCancelModal()" class="btn"
@@ -725,46 +721,7 @@ require_once '../../includes/header.php';
     </div>
 </div>
 
-<!-- ── Payment Modal ─────────────────────────────────────────────────────────── -->
-<div id="paymentModal" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.5);">
-    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--bg-surface);border-radius:var(--radius-lg);padding:2rem;width:100%;max-width:420px;box-shadow:0 25px 50px rgba(0,0,0,.25);">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
-            <h3 style="margin:0;display:flex;align-items:center;gap:6px;">
-                <i data-lucide="credit-card" style="width:18px;height:18px;color:var(--primary)"></i> Record Payment
-            </h3>
-            <button onclick="closePaymentModal()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);">
-                <i data-lucide="x" style="width:20px;height:20px;"></i>
-            </button>
-        </div>
-        <form id="paymentForm">
-            <input type="hidden" name="agreement_id" value="<?= $rentalId ?>">
-            <div class="form-group">
-                <label>Amount (₱) <span style="color:var(--danger)">*</span></label>
-                <input type="number" name="amount" class="form-control" min="0.01" step="0.01" required
-                       max="<?= $balanceOwing ?>" placeholder="Balance owing: ₱<?= number_format($balanceOwing, 2) ?>">
-            </div>
-            <div class="form-group">
-                <label>Payment Method</label>
-                <select name="payment_method" class="form-control">
-                    <option value="cash">Cash</option>
-                    <option value="gcash">GCash</option>
-                    <option value="maya">Maya</option>
-                    <option value="bank_transfer">Bank Transfer</option>
-                    <option value="credit_card">Credit Card</option>
-                </select>
-            </div>
-            <div class="form-group" style="margin-bottom:1.5rem;">
-                <label>Notes (optional)</label>
-                <input type="text" name="notes" class="form-control" placeholder="Reference number, etc.">
-            </div>
-            <div id="paymentError" style="display:none;margin-bottom:1rem;padding:.75rem;background:var(--danger-light);color:var(--danger);border-radius:var(--radius-md);font-size:.875rem;"></div>
-            <div style="display:flex;gap:.75rem;">
-                <button type="submit" class="btn btn-primary" style="flex:1;justify-content:center;">Submit Payment</button>
-                <button type="button" onclick="closePaymentModal()" class="btn btn-secondary">Cancel</button>
-            </div>
-        </form>
-    </div>
-</div>
+
 
 <!-- ── Cancel Modal ──────────────────────────────────────────────────────────── -->
 <?php if (in_array($rental['status'], ['reserved','confirmed','active']) && $authUser->hasPermission('rentals.update')): ?>
@@ -838,36 +795,7 @@ const CANCEL_CSRF      = '<?= getCsrfToken() ?>';
 const CANCEL_AGREEMENT_ID = <?= (int)$rental['agreement_id'] ?>;
 const BASE_URL         = '<?= BASE_URL ?>';
 
-// ── Payment modal ─────────────────────────────────────────────────────────────
-function openPaymentModal()  { document.getElementById('paymentModal').style.display = ''; lucide.createIcons(); }
-function closePaymentModal() { document.getElementById('paymentModal').style.display = 'none'; }
 
-document.getElementById('paymentForm')?.addEventListener('submit', function (e) {
-    e.preventDefault();
-    const data = new FormData(this);
-    data.append('csrf_token', CSRF_TOKEN);
-    const errEl = document.getElementById('paymentError');
-    errEl.style.display = 'none';
-    const btn = this.querySelector('button[type=submit]');
-    btn.disabled = true; btn.textContent = 'Processing…';
-
-    fetch(BASE_URL + 'modules/rentals/ajax/record-payment.php', { method: 'POST', body: data })
-        .then(r => r.json())
-        .then(d => {
-            if (!d.success) {
-                errEl.textContent = d.message; errEl.style.display = '';
-                btn.disabled = false; btn.textContent = 'Submit Payment';
-                return;
-            }
-            closePaymentModal();
-            location.reload();
-        })
-        .catch(() => {
-            errEl.textContent = 'Network error. Please try again.';
-            errEl.style.display = '';
-            btn.disabled = false; btn.textContent = 'Submit Payment';
-        });
-});
 
 // ── Cancel modal ──────────────────────────────────────────────────────────────
 function openCancelModal() {
@@ -922,9 +850,7 @@ function submitCancelRental() {
 document.getElementById('cancelRentalModal')?.addEventListener('click', function (e) {
     if (e.target === this) closeCancelModal();
 });
-document.getElementById('paymentModal')?.addEventListener('click', function (e) {
-    if (e.target === this) closePaymentModal();
-});
+
 
 lucide.createIcons();
 </script>

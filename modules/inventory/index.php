@@ -35,6 +35,17 @@ $onOrder = $stats['on_order'];
 $CAT_LABELS = ['parts' => 'Parts', 'supplies' => 'Supplies', 'fuel' => 'Fuel', 'others' => 'Others'];
 $CAT_COLORS = ['parts' => 'primary', 'supplies' => 'info', 'fuel' => 'warning', 'others' => 'secondary'];
 
+$db = Database::getInstance();
+$pendingItems = $db->fetchAll(
+    "SELECT pi.*, pr.pr_number, pr.created_at as pr_date
+     FROM procurement_items pi
+     JOIN procurement_requests pr ON pi.pr_id = pr.pr_id
+     WHERE pr.status IN ('approved', 'ordered', 'partially_received', 'fully_received')
+     AND pi.inventory_status = 'pending'
+     ORDER BY pr.created_at DESC"
+);
+$pendingCount = count($pendingItems);
+
 // Helpers for sorting and filtering
 $currentSortBy = $filters['sort_by'] ?? 'item_name';
 $currentSortOrder = $filters['sort_order'] ?? 'ASC';
@@ -107,6 +118,9 @@ function buildStatUrl($filterKey) {
     margin: 0 auto 1rem;
     opacity: 0.5;
 }
+#pending-storage-panel.open {
+    transform: translateX(0) !important;
+}
 </style>
 
 <div class="page-header">
@@ -116,6 +130,10 @@ function buildStatUrl($filterKey) {
     </div>
     <div class="page-actions">
         <?php if ($authUser->hasPermission('inventory.create')): ?>
+            <button type="button" class="btn btn-warning" onclick="document.getElementById('pending-storage-panel').classList.add('open')" style="position:relative;background-color:var(--warning-light);color:var(--warning-dark);border-color:var(--warning);">
+                <i data-lucide="inbox" style="width:16px;height:16px;"></i> Pending Storage
+                <span style="position:absolute;top:-6px;right:-6px;background:<?= $pendingCount > 0 ? 'var(--danger)' : 'var(--text-muted)' ?>;color:#fff;font-size:.7rem;font-weight:700;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;"><?= $pendingCount ?></span>
+            </button>
             <a href="item-add.php" class="btn btn-primary">
                 <i data-lucide="plus" style="width:16px;height:16px;"></i> Add Item
             </a>
@@ -312,5 +330,164 @@ function buildStatUrl($filterKey) {
         </div>
     <?php endif; ?>
 </div>
+
+<!-- Pending Storage Slide-out Panel -->
+<div id="pending-storage-panel" style="position:fixed;top:0;right:0;width:520px;max-width:100vw;height:100vh;background:var(--bg-surface);box-shadow:-4px 0 32px rgba(0,0,0,.15);z-index:10000;transform:translateX(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:1.25rem 1.5rem;border-bottom:1px solid var(--border-color);background:var(--bg-muted);">
+        <h2 style="margin:0;font-size:1.05rem;font-weight:700;display:flex;align-items:center;gap:.5rem;">
+            <i data-lucide="inbox" style="width:18px;height:18px;color:var(--warning-dark);"></i>
+            Pending Storage
+            <span style="background:<?= $pendingCount > 0 ? 'var(--danger)' : 'var(--text-muted)' ?>;color:#fff;font-size:.7rem;padding:2px 7px;border-radius:99px;"><?= $pendingCount ?></span>
+        </h2>
+        <div style="display:flex;align-items:center;gap:1rem;">
+            <?php if ($pendingCount > 0): ?>
+            <select id="pending-sort-select" class="form-control form-control--sm" style="font-size:0.8rem;padding:0.25rem 0.5rem;height:auto;" onchange="sortPendingItems()">
+                <option value="newest">Newest First</option>
+                <option value="oldest">Oldest First</option>
+            </select>
+            <?php endif; ?>
+            <button onclick="document.getElementById('pending-storage-panel').classList.remove('open')" style="background:none;border:none;cursor:pointer;padding:4px;color:var(--text-muted);border-radius:6px;" title="Close">
+                <i data-lucide="x" style="width:20px;height:20px;"></i>
+            </button>
+        </div>
+    </div>
+    <div id="pending-items-container" style="flex:1;overflow-y:auto;padding:1.25rem 1.5rem;">
+        <?php if (empty($pendingItems)): ?>
+            <div style="text-align:center;padding:2rem;color:var(--text-muted);">No items pending storage.</div>
+        <?php else: foreach ($pendingItems as $pi): ?>
+            <div class="pending-item-card" id="pending-item-<?= $pi['item_id'] ?>" data-date="<?= htmlspecialchars($pi['pr_date']) ?>" style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;padding:.875rem 1rem;margin-bottom:.75rem;border:1px solid var(--border-color);border-radius:var(--radius-md);background:var(--bg-body);">
+                <div style="flex:1;min-width:0;">
+                    <div style="font-weight:700;font-size:.9375rem;margin-bottom:2px;">
+                        <?= htmlspecialchars($pi['item_description']) ?>
+                    </div>
+                    <div style="font-size:.8rem;color:var(--text-muted);">
+                        <code><?= htmlspecialchars($pi['pr_number']) ?></code>
+                        • <?= floatval($pi['quantity'] ?? $pi['quantity_received']) ?> <?= htmlspecialchars($pi['unit']) ?>
+                        <div style="margin-top:2px;font-size:0.75rem;opacity:0.8;">
+                            <i data-lucide="calendar" style="width:10px;height:10px;display:inline-block;vertical-align:-1px;"></i> <?= date('M d, Y g:i A', strtotime($pi['pr_date'])) ?>
+                        </div>
+                    </div>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:0.5rem;flex-shrink:0;">
+                    <button type="button" class="btn btn-primary btn-sm" onclick="processPendingStorage(<?= $pi['item_id'] ?>, 'store', '<?= htmlspecialchars(addslashes($pi['item_description'])) ?>')" style="width:100%;justify-content:center;">
+                        <i data-lucide="download" style="width:13px;height:13px;"></i> Store
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="processPendingStorage(<?= $pi['item_id'] ?>, 'skip', '<?= htmlspecialchars(addslashes($pi['item_description'])) ?>')" style="width:100%;justify-content:center;color:var(--text-muted);">
+                        <i data-lucide="x-circle" style="width:13px;height:13px;"></i> Skip
+                    </button>
+                </div>
+            </div>
+        <?php endforeach; endif; ?>
+    </div>
+</div>
+
+<div id="pending-storage-modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); z-index:10001; align-items:center; justify-content:center;">
+    <div class="gcr-modal" style="background:var(--bg-card, #ffffff); border:1px solid var(--border-color, #e2e8f0); border-radius:12px; padding:2rem; width:400px; max-width:95vw; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); text-align:center;">
+        <div id="ps-modal-icon" style="width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;">
+            <!-- Icon injected via JS -->
+        </div>
+        <h3 id="ps-modal-title" style="margin:0 0 0.5rem; font-size:1.25rem; font-weight:700;">Confirm Action</h3>
+        <p id="ps-modal-message" style="color:var(--text-muted); margin:0 0 1.5rem; font-size:0.95rem;"></p>
+        
+        <div class="gcr-modal-actions" style="display:flex; gap:1rem; justify-content:center;">
+            <button class="btn btn-secondary" onclick="document.getElementById('pending-storage-modal-overlay').style.display='none'" style="flex:1;">Cancel</button>
+            <button id="ps-modal-confirm" class="btn" style="flex:1;">Confirm</button>
+        </div>
+    </div>
+</div>
+
+<script>
+function sortPendingItems() {
+    const container = document.getElementById('pending-items-container');
+    const items = Array.from(container.querySelectorAll('.pending-item-card'));
+    if (items.length === 0) return;
+    
+    const sortVal = document.getElementById('pending-sort-select').value;
+    
+    items.sort((a, b) => {
+        const dateA = new Date(a.dataset.date).getTime();
+        const dateB = new Date(b.dataset.date).getTime();
+        return sortVal === 'newest' ? dateB - dateA : dateA - dateB;
+    });
+    
+    items.forEach(item => container.appendChild(item));
+}
+
+let pendingStorageActionData = null;
+
+function processPendingStorage(itemId, action, itemName) {
+    pendingStorageActionData = { itemId, action, itemName };
+    
+    const overlay = document.getElementById('pending-storage-modal-overlay');
+    const title = document.getElementById('ps-modal-title');
+    const msg = document.getElementById('ps-modal-message');
+    const iconContainer = document.getElementById('ps-modal-icon');
+    const confirmBtn = document.getElementById('ps-modal-confirm');
+    
+    if (action === 'store') {
+        title.textContent = 'Store in Inventory';
+        msg.textContent = `Are you sure you want to add "${itemName}" to your physical inventory tracking?`;
+        iconContainer.style.background = 'var(--primary-light, #e0e7ff)';
+        iconContainer.innerHTML = '<i data-lucide="download" style="width:24px;height:24px;color:var(--primary);"></i>';
+        confirmBtn.className = 'btn btn-primary';
+        confirmBtn.textContent = 'Yes, Store It';
+    } else {
+        title.textContent = 'Skip Inventory';
+        msg.textContent = `Skip storing "${itemName}"? Use this for items like food or office supplies that don't need garage inventory tracking.`;
+        iconContainer.style.background = 'var(--warning-light, #fef3c7)';
+        iconContainer.innerHTML = '<i data-lucide="x-circle" style="width:24px;height:24px;color:var(--warning-dark, #b45309);"></i>';
+        confirmBtn.className = 'btn btn-warning';
+        confirmBtn.style.color = 'var(--warning-dark)';
+        confirmBtn.textContent = 'Yes, Skip It';
+    }
+    
+    lucide.createIcons();
+    overlay.style.display = 'flex';
+}
+
+document.getElementById('ps-modal-confirm').addEventListener('click', function() {
+    if (!pendingStorageActionData) return;
+    
+    const { itemId, action } = pendingStorageActionData;
+    const btn = this;
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Processing...';
+    
+    const formData = new FormData();
+    formData.append('action', action);
+    formData.append('item_id', itemId);
+    formData.append('csrf_token', '<?= getCsrfToken() ?>');
+
+    fetch('ajax/store-procured-item.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.success) {
+            if (action === 'store') {
+                window.location.reload();
+            } else {
+                const el = document.getElementById('pending-item-' + itemId);
+                if (el) el.remove();
+                document.getElementById('pending-storage-modal-overlay').style.display = 'none';
+            }
+        } else {
+            alert(res.message || 'An error occurred.');
+            document.getElementById('pending-storage-modal-overlay').style.display = 'none';
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        alert('Failed to connect to server.');
+        document.getElementById('pending-storage-modal-overlay').style.display = 'none';
+    })
+    .finally(() => {
+        btn.disabled = false;
+        btn.textContent = originalText;
+    });
+});
+</script>
 
 <?php require_once '../../includes/footer.php'; ?>

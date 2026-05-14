@@ -31,8 +31,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Invalid security token.';
     } else {
         $data = array_merge($data, array_map(function ($v) { return is_string($v) ? trim($v) : $v; }, $_POST));
-        $data['is_accredited'] = isset($_POST['is_accredited']) ? 1 : 0;
-        $data['is_active']     = isset($_POST['is_active']) ? 1 : 0;
+        $data['is_accredited'] = 0; // Default to not accredited
+        $data['is_active']     = 1; // Default to active
 
         if (empty($data['company_name'])) $error = 'Company name is required.';
         elseif (empty($data['phone_primary'])) $error = 'Primary phone is required.';
@@ -223,24 +223,7 @@ require_once '../../includes/header.php';
                         <input type="number" id="lead_time_days" name="lead_time_days" class="form-control" min="0"
                             value="<?= htmlspecialchars($data['lead_time_days']) ?>">
                     </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
-                                <input type="checkbox" name="is_accredited" value="1"
-                                    <?= $data['is_accredited'] ? 'checked' : '' ?>
-                                    style="width:16px;height:16px;">
-                                Accredited Vendor
-                            </label>
-                        </div>
-                        <div class="form-group">
-                            <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
-                                <input type="checkbox" name="is_active" value="1"
-                                    <?= $data['is_active'] ? 'checked' : '' ?>
-                                    style="width:16px;height:16px;">
-                                Active
-                            </label>
-                        </div>
-                    </div>
+
                     <div class="form-group" style="margin-bottom:0;">
                         <label for="notes">Notes</label>
                         <textarea id="notes" name="notes" class="form-control"

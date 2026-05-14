@@ -376,7 +376,8 @@ class Inventory
             FROM procurement_items pli 
             JOIN procurement_requests pr ON pli.pr_id = pr.pr_id 
             JOIN parts_inventory pinv ON pli.item_description = pinv.item_name
-            WHERE pr.status IN ('ordered', 'approved', 'partially_received')"
+            WHERE pr.status IN ('ordered', 'approved', 'partially_received')
+            AND pli.inventory_status = 'pending'"
         );
 
         return $stats;
@@ -394,7 +395,9 @@ class Inventory
             "SELECT SUM(pli.quantity) 
              FROM procurement_items pli 
              JOIN procurement_requests pr ON pli.pr_id = pr.pr_id 
-             WHERE pli.item_description = ? AND pr.status IN ('ordered', 'approved', 'partially_received')",
+             WHERE pli.item_description = ? 
+             AND pr.status IN ('ordered', 'approved', 'partially_received')
+             AND pli.inventory_status = 'pending'",
             [$itemName]
         );
     }

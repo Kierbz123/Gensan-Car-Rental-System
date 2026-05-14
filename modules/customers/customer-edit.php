@@ -128,8 +128,9 @@ require_once '../../includes/header.php';
                     <div class="form-row">
                         <div class="form-group" style="margin: 0;">
                             <label for="date_of_birth">Date of Birth</label>
+                            <?php $dob_val = ($data['date_of_birth'] ?? '') === '0000-00-00' ? '' : ($data['date_of_birth'] ?? ''); ?>
                             <input type="date" id="date_of_birth" name="date_of_birth" class="form-control"
-                                value="<?= htmlspecialchars($data['date_of_birth'] ?? '') ?>">
+                                value="<?= htmlspecialchars($dob_val) ?>">
                         </div>
                         <div class="form-group" style="margin: 0;">
                             <label for="gender">Gender</label>
@@ -322,8 +323,9 @@ require_once '../../includes/header.php';
                     
                     <div class="form-group" style="margin: 0;">
                         <label for="id_expiry_date">ID Expiry</label>
+                        <?php $id_expiry_val = ($data['id_expiry_date'] ?? '') === '0000-00-00' ? '' : ($data['id_expiry_date'] ?? ''); ?>
                         <input type="date" id="id_expiry_date" name="id_expiry_date" class="form-control"
-                            value="<?= htmlspecialchars($data['id_expiry_date'] ?? '') ?>">
+                            value="<?= htmlspecialchars($id_expiry_val) ?>">
                     </div>
 
                     <!-- ID Front Photo Upload -->
@@ -478,7 +480,7 @@ require_once '../../includes/header.php';
     <input type="hidden" name="first_name"             value="<?= htmlspecialchars($customer['first_name']) ?>">
     <input type="hidden" name="last_name"              value="<?= htmlspecialchars($customer['last_name']) ?>">
     <input type="hidden" name="middle_name"            value="<?= htmlspecialchars($customer['middle_name'] ?? '') ?>">
-    <input type="hidden" name="date_of_birth"          value="<?= htmlspecialchars($customer['date_of_birth'] ?? '') ?>">
+    <input type="hidden" name="date_of_birth"          value="<?= htmlspecialchars(($customer['date_of_birth'] ?? '') === '0000-00-00' ? '' : ($customer['date_of_birth'] ?? '')) ?>">
     <input type="hidden" name="gender"                 value="<?= htmlspecialchars($customer['gender'] ?? '') ?>">
     <input type="hidden" name="customer_type"          value="<?= htmlspecialchars($customer['customer_type'] ?? 'walk_in') ?>">
     <input type="hidden" name="phone_primary"          value="<?= htmlspecialchars($customer['phone_primary']) ?>">
@@ -490,7 +492,7 @@ require_once '../../includes/header.php';
     <input type="hidden" name="notes"                  value="<?= htmlspecialchars($customer['notes'] ?? '') ?>">
     <input type="hidden" name="id_type"                value="<?= htmlspecialchars($customer['id_type'] ?? 'drivers_license') ?>">
     <input type="hidden" name="id_number"              value="<?= htmlspecialchars($customer['id_number'] ?? '') ?>">
-    <input type="hidden" name="id_expiry_date"         value="<?= htmlspecialchars($customer['id_expiry_date'] ?? '') ?>">
+    <input type="hidden" name="id_expiry_date"         value="<?= htmlspecialchars(($customer['id_expiry_date'] ?? '') === '0000-00-00' ? '' : ($customer['id_expiry_date'] ?? '')) ?>">
     <input type="hidden" name="emergency_name"         value="<?= htmlspecialchars($customer['emergency_name'] ?? '') ?>">
     <input type="hidden" name="emergency_phone"        value="<?= htmlspecialchars($customer['emergency_phone'] ?? '') ?>">
     <input type="hidden" name="emergency_relationship" value="<?= htmlspecialchars($customer['emergency_relationship'] ?? '') ?>">

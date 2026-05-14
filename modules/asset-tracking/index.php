@@ -90,12 +90,14 @@ if (!empty($_SESSION['error_message'])) { $errorMsg = $_SESSION['error_message']
         <p>Real-time asset tracking and physical status management.</p>
     </div>
     <div class="page-actions">
+        <?php if (in_array($authUser->getData()['role'], [ROLE_SYSTEM_ADMIN, ROLE_FLEET_MANAGER])): ?>
         <button type="button" class="btn btn-secondary" onclick="document.getElementById('decom-panel').classList.add('open')" style="position:relative;" id="decommissionedBtn">
             <i data-lucide="archive" style="width:16px;height:16px;"></i> Decommissioned
             <?php if (!empty($decommissioned)): ?>
                 <span style="position:absolute;top:-6px;right:-6px;background:var(--danger);color:#fff;font-size:.7rem;font-weight:700;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;"><?= count($decommissioned) ?></span>
             <?php endif; ?>
         </button>
+        <?php endif; ?>
         <?php if ($authUser->hasPermission('vehicles.create')): ?>
         <a href="vehicle-add.php" class="btn btn-primary" id="registerAssetBtn">
             <i data-lucide="plus" style="width:16px;height:16px;"></i> Register Asset

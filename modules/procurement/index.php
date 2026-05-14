@@ -32,6 +32,19 @@ $draftCount = $stats['draft'];
 $orderedCount = $stats['ordered'];
 $delaysCount = $stats['delays'];
 
+// Fetch awaiting PO items
+$db = Database::getInstance();
+$awaitingPoItems = $db->fetchAll(
+    "SELECT pr.*, 
+            CONCAT(u.first_name, ' ', u.last_name) as requestor_name,
+            (SELECT COUNT(*) FROM procurement_items WHERE pr_id = pr.pr_id) as item_count
+     FROM procurement_requests pr
+     LEFT JOIN users u ON pr.requestor_id = u.user_id
+     WHERE pr.status = 'approved'
+     ORDER BY pr.approved_at DESC"
+);
+$awaitingPoCount = count($awaitingPoItems);
+
 // Helper for building sort URLs
 $currentSortBy = $filters['sort_by'] ?? 'created_at';
 $currentSortOrder = $filters['sort_order'] ?? 'DESC';
@@ -121,7 +134,11 @@ function buildStatUrl($statusFilter) {
         <h1>Procurement Control</h1>
         <p>Monitoring purchase requests, budget approvals, and asset acquisition.</p>
     </div>
-    <div class="page-actions">
+    <div class="page-actions" style="display:flex;gap:0.5rem;align-items:center;">
+        <button type="button" class="btn btn-warning" onclick="document.getElementById('awaiting-po-panel').classList.add('open')" style="position:relative;background-color:var(--warning-light);color:var(--warning-dark);border-color:var(--warning);">
+            <i data-lucide="file-signature" style="width:16px;height:16px;"></i> Awaiting PO
+            <span style="position:absolute;top:-6px;right:-6px;background:<?= $awaitingPoCount > 0 ? 'var(--danger)' : 'var(--text-muted)' ?>;color:#fff;font-size:.7rem;font-weight:700;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;"><?= $awaitingPoCount ?></span>
+        </button>
         <a href="pr-create.php" class="btn btn-primary">
             <i data-lucide="plus" style="width:16px;height:16px;"></i> New Request
         </a>
@@ -295,5 +312,56 @@ function buildStatUrl($statusFilter) {
         <?php endfor; ?>
     </div>
 <?php endif; ?>
+
+<!-- Awaiting PO Generation Panel -->
+<div id="awaiting-po-panel" style="position:fixed;top:0;right:0;width:520px;max-width:100vw;height:100vh;background:var(--bg-surface);box-shadow:-4px 0 32px rgba(0,0,0,.15);z-index:10000;transform:translateX(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:1.25rem 1.5rem;border-bottom:1px solid var(--border-color);background:var(--bg-muted);">
+        <h2 style="margin:0;font-size:1.05rem;font-weight:700;display:flex;align-items:center;gap:.5rem;">
+            <i data-lucide="file-signature" style="width:18px;height:18px;color:var(--warning-dark);"></i>
+            Awaiting PO Generation
+            <span style="background:<?= $awaitingPoCount > 0 ? 'var(--danger)' : 'var(--text-muted)' ?>;color:#fff;font-size:.7rem;padding:2px 7px;border-radius:99px;"><?= $awaitingPoCount ?></span>
+        </h2>
+        <button onclick="document.getElementById('awaiting-po-panel').classList.remove('open')" style="background:none;border:none;cursor:pointer;padding:4px;color:var(--text-muted);border-radius:6px;" title="Close">
+            <i data-lucide="x" style="width:20px;height:20px;"></i>
+        </button>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:1.25rem 1.5rem;">
+        <?php if (empty($awaitingPoItems)): ?>
+            <div style="text-align:center;padding:2rem;color:var(--text-muted);">No approved requests waiting for PO.</div>
+        <?php else: foreach ($awaitingPoItems as $pr): ?>
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;padding:.875rem 1rem;margin-bottom:.75rem;border:1px solid var(--border-color);border-radius:var(--radius-md);background:var(--bg-body);">
+                <div style="flex:1;min-width:0;">
+                    <div style="font-weight:700;font-size:.9375rem;margin-bottom:2px;display:flex;align-items:center;gap:0.5rem;">
+                        <?= htmlspecialchars($pr['pr_number']) ?>
+                        <span class="badge badge-success" style="font-size:0.65rem;padding:0.1rem 0.4rem;">Approved</span>
+                    </div>
+                    <div style="font-size:.8rem;color:var(--text-muted);margin-bottom:4px;">
+                        <?= htmlspecialchars($pr['requestor_name']) ?> • <?= htmlspecialchars($pr['department']) ?>
+                    </div>
+                    <div style="font-size:.85rem;font-weight:600;">
+                        ₱<?= number_format($pr['total_estimated_cost'], 2) ?> <span style="font-weight:normal;color:var(--text-muted);">for <?= $pr['item_count'] ?> item(s)</span>
+                    </div>
+                    <div style="margin-top:4px;font-size:0.75rem;opacity:0.8;color:var(--text-muted);">
+                        <i data-lucide="calendar" style="width:10px;height:10px;display:inline-block;vertical-align:-1px;"></i> Approved: <?= date('M d, Y', strtotime($pr['approved_at'] ?? $pr['updated_at'])) ?>
+                    </div>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:0.5rem;flex-shrink:0;">
+                    <a href="po-generate.php?pr_id=<?= $pr['pr_id'] ?>" class="btn btn-primary btn-sm" style="width:100%;justify-content:center;">
+                        <i data-lucide="file-plus" style="width:14px;height:14px;"></i> Generate PO
+                    </a>
+                    <a href="pr-view.php?id=<?= $pr['pr_id'] ?>" class="btn btn-secondary btn-sm" style="width:100%;justify-content:center;color:var(--text-muted);">
+                        <i data-lucide="eye" style="width:14px;height:14px;"></i> View PR
+                    </a>
+                </div>
+            </div>
+        <?php endforeach; endif; ?>
+    </div>
+</div>
+
+<style>
+#awaiting-po-panel.open {
+    transform: translateX(0) !important;
+}
+</style>
 
 <?php require_once '../../includes/footer.php'; ?>

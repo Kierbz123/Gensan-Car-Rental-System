@@ -17,8 +17,8 @@ try {
         exit;
     }
 
-    $inventory = new Inventory();
-    $items = $inventory->getBySupplier($supplierId);
+    $catalog = new SupplierCatalog();
+    $items = $catalog->getBySupplier($supplierId);
 
     echo json_encode([
         'success' => true,

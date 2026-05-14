@@ -127,9 +127,7 @@ if ($d['status'] === 'suspended') $statusColor = 'var(--danger)';
                 <div class="card-body">
                     <label style="display: block; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 0.75rem;">Administrative Notes</label>
                     <?php if (!empty($d['notes'])): ?>
-                        <div style="width: 100%; padding: 1rem; background: var(--secondary-50); border-radius: var(--radius-md); border: 1px solid var(--border-color); border-left: 3px solid var(--primary-300); white-space: pre-wrap; line-height: 1.6; color: var(--text-main); font-size: 0.875rem;">
-                            <?= htmlspecialchars($d['notes']) ?>
-                        </div>
+                        <div style="width: 100%; padding: 1rem; background: var(--secondary-50); border-radius: var(--radius-md); border: 1px solid var(--primary-200); border-left: 4px solid var(--accent); white-space: pre-wrap; line-height: 1.6; color: var(--text-main); font-size: 0.875rem;"><?= htmlspecialchars($d['notes']) ?></div>
                     <?php else: ?>
                         <div style="width: 100%; padding: 1.5rem 1rem; background: var(--bg-muted); border-radius: var(--radius-md); border: 1px dashed var(--border-color); text-align: center; color: var(--text-muted); font-size: 0.875rem; font-style: italic;">
                             No administrative notes recorded.
@@ -203,52 +201,61 @@ if ($d['status'] === 'suspended') $statusColor = 'var(--danger)';
             <!-- Licensing Credentials -->
             <div class="card">
                 <div class="card-body">
-                    <h2 style="margin-bottom: var(--space-4); margin-top: 0; font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
-                        <i data-lucide="id-card" style="width:18px;height:18px;color:var(--primary);"></i> Licensing Credentials
+                    <h2 style="margin-bottom: var(--space-5); margin-top: 0; font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
+                        <i data-lucide="id-card" style="width:18px;height:18px;color:var(--accent);"></i> Licensing Credentials
                     </h2>
                     
-                    <div style="background: <?= $licBgStatus ?>; border: 1px solid <?= $licBorderStatus ?>; border-radius: var(--radius-md); padding: 1.25rem; margin-bottom: var(--space-4); position: relative; overflow: hidden;">
-                        <div class="grid" style="grid-template-columns: 1fr 1fr; gap: var(--space-4);">
-                            <div>
-                                <div style="font-weight: 800; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 0.5rem;">
-                                    LTO License Expiry
+                    <div style="background: var(--bg-surface); border: 1px solid var(--primary-100); border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow-sm);">
+                        <!-- Header Status Area -->
+                        <div style="background: <?= $licBgStatus ?>; border-bottom: 1px solid <?= $licBorderStatus ?>; padding: 1.25rem 1.5rem; position: relative; overflow: hidden;">
+                            <i data-lucide="shield-check" style="position: absolute; right: -10px; top: -10px; width: 90px; height: 90px; color: <?= $licTextStatus ?>; opacity: 0.05; transform: rotate(15deg);"></i>
+                            
+                            <div class="grid" style="grid-template-columns: 1.5fr 1fr; gap: var(--space-4); position: relative; z-index: 1;">
+                                <div>
+                                    <div style="font-weight: 800; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.075em; color: var(--text-muted); margin-bottom: 0.5rem;">
+                                        LTO License Expiry Matrix
+                                    </div>
+                                    <div style="font-weight: 900; font-size: 1.75rem; color: var(--text-main); line-height: 1; letter-spacing: -0.02em;">
+                                        <?= date('M d, Y', strtotime($d['license_expiry'])) ?>
+                                    </div>
+                                    <div style="font-size: 0.8125rem; color: <?= $licTextStatus ?>; margin-top: 10px; font-weight: 700; display: flex; align-items: center; gap: 6px;">
+                                        <i data-lucide="clock" style="width: 14px; height: 14px;"></i>
+                                        <?= $daysLeft > 0 ? $daysLeft . ' Days Remaining' : ($daysLeft === 0 ? 'Expires Today' : abs($daysLeft) . ' Days Overdue') ?>
+                                    </div>
                                 </div>
-                                <div style="font-weight: 900; font-size: 1.5rem; color: var(--text-main); line-height: 1;">
-                                    <?= date('M d, Y', strtotime($d['license_expiry'])) ?>
-                                </div>
-                                <div style="font-size: 0.85rem; color: <?= $licTextStatus ?>; margin-top: 8px; font-weight: 600;">
-                                    <?= $daysLeft > 0 ? $daysLeft . ' days remaining' : ($daysLeft === 0 ? 'Expires today' : abs($daysLeft) . ' days ago') ?>
-                                </div>
-                            </div>
-                            <div>
-                                <div style="font-weight: 800; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 0.5rem;">
-                                    Status
-                                </div>
-                                <div style="font-weight: 800; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: <?= $licTextStatus ?>; padding: 4px 10px; background: white; border-radius: var(--radius-full); border: 1px solid <?= $licBorderStatus ?>; box-shadow: 0 2px 4px rgba(0,0,0,0.02); display: inline-flex; align-items: center; gap: 4px;">
-                                    <?php if ($isExpired): ?>
-                                        <i data-lucide="x-circle" style="width: 14px; height: 14px;"></i> EXPIRED
-                                    <?php elseif ($isWarning): ?>
-                                        <i data-lucide="alert-triangle" style="width: 14px; height: 14px;"></i> EXPIRING SOON
-                                    <?php else: ?>
-                                        <i data-lucide="check-circle" style="width: 14px; height: 14px;"></i> VALID
-                                    <?php endif; ?>
+                                <div>
+                                    <div style="font-weight: 800; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.075em; color: var(--text-muted); margin-bottom: 0.5rem;">
+                                        Credential Status
+                                    </div>
+                                    <div style="font-weight: 900; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.075em; color: <?= $licTextStatus ?>; padding: 6px 14px; background: white; border-radius: var(--radius-full); border: 1px solid <?= $licBorderStatus ?>; box-shadow: var(--shadow-sm); display: inline-flex; align-items: center; gap: 6px;">
+                                        <?php if ($isExpired): ?>
+                                            <i data-lucide="x-circle" style="width: 14px; height: 14px;"></i> LICENSE EXPIRED
+                                        <?php elseif ($isWarning): ?>
+                                            <i data-lucide="alert-triangle" style="width: 14px; height: 14px;"></i> RENEWAL PENDING
+                                        <?php else: ?>
+                                            <i data-lucide="check-circle" style="width: 14px; height: 14px;"></i> VALID CREDENTIAL
+                                        <?php endif; ?>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    <div class="grid" style="grid-template-columns: 1fr 1fr; gap: var(--space-4); background: var(--secondary-50); padding: var(--space-4); border-radius: var(--radius-md);">
-                        <div>
-                            <label style="display: block; font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px;">License Number</label>
-                            <p style="font-weight: bold; margin: 0; font-family: monospace; font-size: 0.95rem; letter-spacing:0.05em;">
-                                <?= htmlspecialchars($d['license_number']) ?>
-                            </p>
-                        </div>
-                        <div>
-                            <label style="display: block; font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px;">License Classification</label>
-                            <p style="font-weight: bold; margin: 0; font-size: 0.95rem;">
-                                <?= ucwords(str_replace('_', ' ', $d['license_type'])) ?>
-                            </p>
+                        <!-- Info Details Area -->
+                        <div style="padding: 1.25rem 1.5rem; background: white;">
+                            <div class="grid" style="grid-template-columns: 1fr 1fr; gap: var(--space-6);">
+                                <div>
+                                    <label style="display: block; font-size: 0.65rem; font-weight: 800; text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px; letter-spacing: 0.075em;">Official ID Number</label>
+                                    <p style="font-weight: 800; margin: 0; font-family: monospace; font-size: 1.1rem; color: var(--text-main); letter-spacing: 0.05em;">
+                                        <?= htmlspecialchars($d['license_number']) ?>
+                                    </p>
+                                </div>
+                                <div>
+                                    <label style="display: block; font-size: 0.65rem; font-weight: 800; text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px; letter-spacing: 0.075em;">License Classification</label>
+                                    <p style="font-weight: 700; margin: 0; font-size: 1rem; color: var(--text-main);">
+                                        <?= ucwords(str_replace('_', ' ', $d['license_type'])) ?>
+                                    </p>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -261,6 +268,9 @@ if ($d['status'] === 'suspended') $statusColor = 'var(--danger)';
                     <h2 class="card-title"
                         style="margin: 0; font-size: 1.1rem; display: flex; align-items: center; gap: 8px;"><i
                             data-lucide="history" style="width:18px;height:18px;color:var(--primary);"></i> Chauffeur Deployment History</h2>
+                    <a href="export-earnings.php?id=<?= $driverId ?>" class="btn btn-secondary btn-sm" target="_blank" style="display:flex;align-items:center;gap:6px;">
+                        <i data-lucide="download" style="width:14px;height:14px;"></i> Export Earnings
+                    </a>
                 </div>
                 <div class="table-container" style="border:none; margin: 0 -var(--space-4) -var(--space-4) -var(--space-4);">
                     <table style="width: 100%; border-collapse: collapse;">

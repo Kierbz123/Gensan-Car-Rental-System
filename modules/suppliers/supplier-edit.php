@@ -57,8 +57,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             // Update Action Handler
             $data = array_merge($data, array_map(function ($v) { return is_string($v) ? trim($v) : $v; }, $_POST));
-            $data['is_accredited'] = isset($_POST['is_accredited']) ? 1 : 0;
-            $data['is_active']     = isset($_POST['is_active']) ? 1 : 0;
+            $data['is_accredited'] = $item['is_accredited']; // Preserve existing
+            $data['is_active']     = $item['is_active'];     // Preserve existing
 
         if (empty($data['company_name'])) $error = 'Company name is required.';
         elseif (empty($data['phone_primary'])) $error = 'Primary phone is required.';
@@ -241,22 +241,7 @@ $BIZ_TYPES = [
                         <input type="number" id="lead_time_days" name="lead_time_days" class="form-control" min="0"
                             value="<?= htmlspecialchars($data['lead_time_days']) ?>">
                     </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
-                                <input type="checkbox" name="is_accredited" value="1"
-                                    <?= $data['is_accredited'] ? 'checked' : '' ?> style="width:16px;height:16px;">
-                                Accredited Vendor
-                            </label>
-                        </div>
-                        <div class="form-group">
-                            <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
-                                <input type="checkbox" name="is_active" value="1"
-                                    <?= $data['is_active'] ? 'checked' : '' ?> style="width:16px;height:16px;">
-                                Active
-                            </label>
-                        </div>
-                    </div>
+
                     <div class="form-group" style="margin-bottom:0;">
                         <label for="notes">Notes</label>
                         <textarea id="notes" name="notes" class="form-control"
@@ -303,8 +288,6 @@ $BIZ_TYPES = [
                     <th>Product Name</th>
                     <th>Category</th>
                     <th>Unit Cost</th>
-                    <th>Stock</th>
-                    <th>Reorder Level</th>
                     <th style="text-align:center;">Actions</th>
                 </tr>
             </thead>
@@ -351,26 +334,9 @@ $BIZ_TYPES = [
                 </div>
             </div>
             
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.25rem;">
-                <div>
-                    <label for="pm-unit-cost" style="display:block; margin-bottom:0.5rem; font-weight:600; font-size:0.875rem; color:var(--text-secondary, #475569);">Unit Cost (₱) <span style="color:#ef4444">*</span></label>
-                    <input type="number" id="pm-unit-cost" class="form-control" min="0" step="0.01" placeholder="0.00" style="width:100%; background:var(--bg-body, #fff);">
-                </div>
-                <div>
-                    <label for="pm-qty" style="display:block; margin-bottom:0.5rem; font-weight:600; font-size:0.875rem; color:var(--text-secondary, #475569);">Current Stock</label>
-                    <input type="number" id="pm-qty" class="form-control" min="0" step="0.001" placeholder="0" style="width:100%; background:var(--bg-body, #fff);">
-                </div>
-            </div>
-            
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.25rem;">
-                <div>
-                    <label for="pm-reorder" style="display:block; margin-bottom:0.5rem; font-weight:600; font-size:0.875rem; color:var(--text-secondary, #475569);">Reorder Level</label>
-                    <input type="number" id="pm-reorder" class="form-control" min="0" step="0.001" placeholder="0" style="width:100%; background:var(--bg-body, #fff);">
-                </div>
-                <div>
-                    <label for="pm-location" style="display:block; margin-bottom:0.5rem; font-weight:600; font-size:0.875rem; color:var(--text-secondary, #475569);">Storage Location</label>
-                    <input type="text" id="pm-location" class="form-control" placeholder="Main Garage" style="width:100%; background:var(--bg-body, #fff);">
-                </div>
+            <div>
+                <label for="pm-unit-cost" style="display:block; margin-bottom:0.5rem; font-weight:600; font-size:0.875rem; color:var(--text-secondary, #475569);">Unit Cost (₱) <span style="color:#ef4444">*</span></label>
+                <input type="number" id="pm-unit-cost" class="form-control" min="0" step="0.01" placeholder="0.00" style="width:100%; background:var(--bg-body, #fff);">
             </div>
             
             <div>
@@ -406,20 +372,16 @@ function loadProducts() {
                 return;
             }
             tbody.innerHTML = res.data.map(p => {
-                const isLow = parseFloat(p.quantity_on_hand) <= parseFloat(p.reorder_level);
-                const stockColor = isLow ? 'color:var(--danger);' : 'color:var(--success, #10b981);';
                 return `<tr>
-                    <td style="font-family:monospace;font-size:0.8rem;color:var(--text-muted);">${esc(p.item_code)}</td>
+                    <td style="font-family:monospace;font-size:0.8rem;color:var(--text-muted);">${esc(p.vendor_item_code || '—')}</td>
                     <td style="font-weight:600;">${esc(p.item_name)}</td>
                     <td><span style="font-size:0.7rem;font-weight:800;color:var(--text-secondary);background:var(--bg-body);padding:2px 8px;border-radius:4px;border:1px solid var(--border-color);text-transform:uppercase;letter-spacing:0.05em;">${esc(p.item_category)}</span></td>
                     <td style="font-weight:500;">₱${parseFloat(p.unit_cost).toLocaleString('en-PH', {minimumFractionDigits:2})}</td>
-                    <td style="${stockColor}font-weight:600;">${parseFloat(p.quantity_on_hand).toFixed(3)} ${esc(p.unit)}</td>
-                    <td style="color:var(--text-muted);">${parseFloat(p.reorder_level).toFixed(3)} ${esc(p.unit)}</td>
                     <td style="text-align:center;">
-                        <button class="btn btn-ghost btn-sm" onclick="editProduct(${p.inventory_id})" title="Edit">
+                        <button class="btn btn-ghost btn-sm" onclick="editProduct(${p.catalog_id})" title="Edit">
                             <i data-lucide="pencil" style="width:14px;height:14px;color:var(--primary);"></i>
                         </button>
-                        <button class="btn btn-ghost btn-sm" onclick="deleteProduct(${p.inventory_id}, '${esc(p.item_name)}')" title="Delete">
+                        <button class="btn btn-ghost btn-sm" onclick="deleteProduct(${p.catalog_id}, '${esc(p.item_name)}')" title="Delete">
                             <i data-lucide="trash-2" style="width:14px;height:14px;color:var(--danger);"></i>
                         </button>
                     </td>
@@ -431,14 +393,11 @@ function loadProducts() {
 
 // ── Open modal for Add ────────────────────────────────────────────────
 function openProductModal(data = null) {
-    document.getElementById('pm-inventory-id').value = data ? data.inventory_id : '';
+    document.getElementById('pm-inventory-id').value = data ? data.catalog_id : '';
     document.getElementById('pm-item-name').value    = data ? data.item_name : '';
     document.getElementById('pm-category').value     = data ? data.item_category : 'parts';
     document.getElementById('pm-unit').value         = data ? data.unit : 'pcs';
     document.getElementById('pm-unit-cost').value    = data ? data.unit_cost : '';
-    document.getElementById('pm-qty').value          = data ? data.quantity_on_hand : '0';
-    document.getElementById('pm-reorder').value      = data ? data.reorder_level : '0';
-    document.getElementById('pm-location').value     = data ? data.storage_location : 'Main Garage';
     document.getElementById('pm-notes').value        = data ? (data.notes || '') : '';
     document.getElementById('product-modal-title').textContent = data ? 'Edit Product' : 'Add Product';
     document.getElementById('product-modal-error').style.display = 'none';
@@ -450,9 +409,8 @@ function closeProductModal() {
     document.getElementById('product-modal').style.display = 'none';
 }
 
-// ── Edit: fetch product then open modal ───────────────────────────────
-function editProduct(inventoryId) {
-    fetch(`${AJAX_URL}?action=get&inventory_id=${inventoryId}`)
+function editProduct(catalogId) {
+    fetch(`${AJAX_URL}?action=get&catalog_id=${catalogId}`)
         .then(r => r.json())
         .then(res => {
             if (!res.success) return alert(res.message);
@@ -462,19 +420,16 @@ function editProduct(inventoryId) {
 
 // ── Save (Add or Update) ──────────────────────────────────────────────
 function saveProduct() {
-    const inventoryId = document.getElementById('pm-inventory-id').value;
+    const catalogId = document.getElementById('pm-inventory-id').value;
     const formData = new FormData();
-    formData.append('action', inventoryId ? 'update' : 'add');
+    formData.append('action', catalogId ? 'update' : 'add');
     formData.append('csrf_token', CSRF_TOKEN);
     formData.append('supplier_id', SUPPLIER_ID);
-    if (inventoryId) formData.append('inventory_id', inventoryId);
+    if (catalogId) formData.append('catalog_id', catalogId);
     formData.append('item_name', document.getElementById('pm-item-name').value);
     formData.append('item_category', document.getElementById('pm-category').value);
     formData.append('unit', document.getElementById('pm-unit').value);
     formData.append('unit_cost', document.getElementById('pm-unit-cost').value);
-    formData.append('quantity_on_hand', document.getElementById('pm-qty').value);
-    formData.append('reorder_level', document.getElementById('pm-reorder').value);
-    formData.append('storage_location', document.getElementById('pm-location').value);
     formData.append('notes', document.getElementById('pm-notes').value);
 
     const btn = document.getElementById('pm-save-btn');
@@ -496,12 +451,12 @@ function saveProduct() {
 }
 
 // ── Delete ────────────────────────────────────────────────────────────
-function deleteProduct(inventoryId, itemName) {
-    if (!confirm(`Delete "${itemName}"?\nThis cannot be undone if it is not linked to any procurement requests.`)) return;
+function deleteProduct(catalogId, itemName) {
+    if (!confirm(`Delete "${itemName}" from this catalog?`)) return;
     const formData = new FormData();
     formData.append('action', 'delete');
     formData.append('csrf_token', CSRF_TOKEN);
-    formData.append('inventory_id', inventoryId);
+    formData.append('catalog_id', catalogId);
     fetch(AJAX_URL, { method: 'POST', body: formData })
         .then(r => r.json())
         .then(res => {

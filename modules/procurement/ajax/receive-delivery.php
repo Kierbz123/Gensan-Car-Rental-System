@@ -78,17 +78,24 @@ foreach ($deliveries as $d) {
         continue;
     }
 
-    // --- Step 2: Sync into inventory ledger (non-fatal) ---
-    if ($inventoryId) {
-        try {
-            $item = $db->fetchOne("SELECT item_description FROM procurement_items WHERE item_id = ?", [$itemId]);
-            $notes = 'Received from PO (PR #' . $prId . ')' . ($item ? ': ' . $item['item_description'] : '');
-            $invObj->receive($inventoryId, $qtyReceived, $unitCost, $prId, 'procurement', $userId, $notes);
-            $inventoryOk = true;
-        } catch (Exception $e) {
-            $inventoryOk = false;
-            $warning = 'Inventory sync failed: ' . $e->getMessage();
+    // --- Step 2: Flag for Staging (Decoupled Inventory Sync) ---
+    try {
+        // We just update the item to link the chosen inventory ID (if any), and mark as pending storage
+        $db->execute("UPDATE procurement_items SET inventory_id = ?, inventory_status = 'pending' WHERE item_id = ?", [$inventoryId, $itemId]);
+        $inventoryOk = true; // Signifies it successfully staged
+
+        // Notify Inventory Managers / Admins
+        $invManagers = $db->fetchAll("SELECT user_id FROM users WHERE role IN ('system_admin', 'fleet_manager') AND status = 'active'");
+        foreach ($invManagers as $mgr) {
+            $db->execute(
+                "INSERT INTO notifications (user_id, type, title, message, related_module, related_record_id, related_url)
+                 VALUES (?, 'inventory_pending', 'New Items Awaiting Storage', ?, 'inventory', ?, 'modules/inventory/index.php')",
+                [$mgr['user_id'], "A delivery for PR #{$prId} has been recorded. Items are waiting to be put away.", $itemId]
+            );
         }
+    } catch (Exception $e) {
+        $inventoryOk = false;
+        $warning = 'Staging link failed: ' . $e->getMessage();
     }
 
     $results[] = [

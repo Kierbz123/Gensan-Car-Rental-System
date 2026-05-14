@@ -211,46 +211,53 @@ require_once '../../includes/header.php';
             <!-- Contact Info -->
             <div class="card">
                 <div class="card-body">
-                    <h2 style="margin-bottom: var(--space-4); margin-top: 0;">Contact Information</h2>
-                    <div class="grid" style="grid-template-columns: 1fr 1fr; gap: var(--space-4);">
-                        <!-- Fields mapping -->
+                    <h2 style="margin-bottom: var(--space-5); margin-top: 0; font-size: 1.1rem; display: flex; align-items: center; gap: 10px;">
+                        <i data-lucide="contact" style="width:20px;height:20px;color:var(--accent);"></i> Contact Information
+                    </h2>
+                    
+                    <div class="grid" style="grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--space-5);">
                         <?php
                         $fields = [
-                            ['Phone', 'phone_primary'],
-                            ['Alt Phone', 'phone_secondary'],
-                            ['Email', 'email'],
-                            ['Date of Birth', 'date_of_birth'],
-                            ['Gender', 'gender'],
-                            ['ID Number', 'id_number'],
-                            ['ID Type', 'id_type'],
-                            ['ID Expiry', 'id_expiry_date'],
+                            ['Phone Number', 'phone_primary', 'phone'],
+                            ['Secondary Phone', 'phone_secondary', 'smartphone'],
+                            ['Email Address', 'email', 'mail'],
+                            ['Date of Birth', 'date_of_birth', 'calendar'],
+                            ['Gender', 'gender', 'user-2'],
+                            ['Identification Number', 'id_number', 'fingerprint'],
+                            ['ID Category', 'id_type', 'badge-check'],
+                            ['Credential Expiry', 'id_expiry_date', 'clock'],
                         ];
-                        foreach ($fields as [$label, $key]):
+                        foreach ($fields as [$label, $key, $icon]):
                             $val = $customer[$key] ?? null;
-                            if (!$val)
-                                continue;
                             ?>
-                            <div>
-                                <label
-                                    style="display: block; font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px;"><?= $label ?></label>
-                                <p style="font-weight: bold; margin: 0; word-break: break-all;">
-                                    <?= htmlspecialchars(str_contains($key, 'date') ? formatDate($val) : $val) ?>
-                                </p>
+                            <div style="display: flex; gap: 12px; align-items: flex-start;">
+                                <div style="background: var(--primary-50); padding: 8px; border-radius: 8px; color: var(--primary-400); flex-shrink: 0;">
+                                    <i data-lucide="<?= $icon ?>" style="width: 16px; height: 16px;"></i>
+                                </div>
+                                <div style="overflow: hidden;">
+                                    <label style="display: block; font-size: 0.65rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 2px; font-weight: 700; letter-spacing: 0.05em;"><?= $label ?></label>
+                                    <p style="font-weight: 700; margin: 0; font-size: 0.9375rem; color: var(--text-main); word-break: break-all;">
+                                        <?= htmlspecialchars(str_contains($key, 'date') ? formatDate($val) : (str_contains($key, 'type') ? ucwords(str_replace('_', ' ', (string)$val)) : ($val ?: '-'))) ?>
+                                    </p>
+                                </div>
                             </div>
                         <?php endforeach; ?>
+                    </div>
 
-                        <?php if ($customer['address']): ?>
-                            <div style="grid-column: 1 / -1;">
-                                <label
-                                    style="display: block; font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px;">Address</label>
-                                <p style="font-weight: bold; margin: 0;">
-                                    <?= htmlspecialchars($customer['address']) ?>,
-                                    <?= htmlspecialchars($customer['city']) ?>,
-                                    <?= htmlspecialchars($customer['province']) ?>
+                    <?php if ($customer['address']): ?>
+                        <div style="margin-top: var(--space-6); padding: var(--space-4); background: var(--secondary-50); border-radius: var(--radius-lg); border-left: 4px solid var(--primary-200); display: flex; gap: 16px; align-items: flex-start;">
+                            <div style="background: white; padding: 10px; border-radius: 10px; color: var(--primary-400); box-shadow: var(--shadow-sm); flex-shrink: 0;">
+                                <i data-lucide="map-pin" style="width: 18px; height: 18px;"></i>
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 0.65rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px; font-weight: 700; letter-spacing: 0.05em;">Principal Residence</label>
+                                <p style="font-weight: 700; margin: 0; font-size: 1rem; color: var(--text-main); line-height: 1.5;">
+                                    <?= htmlspecialchars($customer['address']) ?>,<br>
+                                    <?= htmlspecialchars($customer['city']) ?>, <?= htmlspecialchars($customer['province']) ?>
                                 </p>
                             </div>
-                        <?php endif; ?>
-                    </div>
+                        </div>
+                    <?php endif; ?>
                 </div>
             </div>
 

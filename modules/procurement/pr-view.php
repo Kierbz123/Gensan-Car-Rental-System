@@ -34,7 +34,11 @@ try {
     }
 
     $items = $db->fetchAll(
-        "SELECT * FROM procurement_items WHERE pr_id = ? ORDER BY line_number",
+        "SELECT pi.*, s.company_name as supplier_name 
+         FROM procurement_items pi 
+         LEFT JOIN suppliers s ON pi.supplier_id = s.supplier_id
+         WHERE pi.pr_id = ? 
+         ORDER BY pi.line_number",
         [$prId]
     );
 
@@ -57,7 +61,12 @@ require_once '../../includes/header.php';
         <h1>Purchase Request Detail</h1>
         <p>Viewing requisition <?= htmlspecialchars($pr['pr_number']) ?> — itemized breakdown.</p>
     </div>
-    <div class="page-actions">
+    <div class="page-actions" style="display:flex;gap:0.5rem;align-items:center;">
+        <?php if (in_array($pr['status'], ['approved', 'ordered', 'partially_received', 'fully_received'])): ?>
+            <a href="print-receipt.php?id=<?= $prId ?>" target="_blank" class="btn btn-primary" style="display:flex;align-items:center;gap:4px;">
+                <i data-lucide="printer" style="width:16px;height:16px;"></i> Print Shopping List
+            </a>
+        <?php endif; ?>
         <a href="index.php" class="btn btn-secondary">
             <i data-lucide="arrow-left" style="width:16px;height:16px;"></i> Back to PR Hub
         </a>
@@ -160,6 +169,7 @@ if ($hasRejection || $hasApprNotes):
                     <th>#</th>
                     <th>Description</th>
                     <th>Category</th>
+                    <th>Supplier</th>
                     <th>Vehicle</th>
                     <th>Qty</th>
                     <th>Est. Unit Cost</th>
@@ -184,6 +194,9 @@ if ($hasRejection || $hasApprNotes):
                                         style="color:var(--text-muted);"><?= htmlspecialchars($item['specification']) ?></small><?php endif; ?>
                             </td>
                             <td><?= ucfirst($item['item_category']) ?></td>
+                            <td style="font-size: 0.85rem; color: var(--primary-dark); font-weight: 600;">
+                                <?= $item['supplier_name'] ? htmlspecialchars($item['supplier_name']) : '<span style="color:var(--text-muted);font-weight:400;">—</span>' ?>
+                            </td>
                             <td><?= $item['vehicle_id'] ?: '—' ?></td>
                             <td><?= number_format($item['quantity'], 2) ?>         <?= htmlspecialchars($item['unit']) ?></td>
                             <td>₱<?= number_format($item['estimated_unit_cost'], 2) ?></td>
@@ -193,7 +206,7 @@ if ($hasRejection || $hasApprNotes):
             </tbody>
             <tfoot>
                 <tr style="background:var(--bg-muted); font-weight:700;">
-                    <td colspan="6"
+                    <td colspan="7"
                         style="text-align:right; padding:var(--space-4) var(--space-6); border-top:1px solid var(--border-color);">
                         GRAND TOTAL:</td>
                     <td style="padding:var(--space-4) var(--space-6); border-top:1px solid var(--border-color);">

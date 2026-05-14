@@ -91,7 +91,7 @@ class Customer
                 $data['zip_code'] ?? null,
                 $data['id_type'] ?? 'drivers_license',
                 $data['id_number'] ?? null,
-                $data['id_expiry_date'] ?? null,
+                !empty($data['id_expiry_date']) ? $data['id_expiry_date'] : null,
                 $idFrontPath,
                 $idBackPath,
                 $profilePicturePath,
@@ -145,8 +145,9 @@ class Customer
             }
         }
 
-        // Fix empty date of birth throwing errors for DATE type
+        // Fix empty dates throwing errors for DATE type
         $dob = !empty($data['date_of_birth']) ? $data['date_of_birth'] : null;
+        $idExpiry = !empty($data['id_expiry_date']) ? $data['id_expiry_date'] : null;
 
         // Validation bounds mirroring create()
         if (strlen($data['phone_primary']) > 20) {
@@ -156,34 +157,48 @@ class Customer
             throw new Exception("Invalid email address format.");
         }
 
-
         $updates = [
             "customer_type = ?",
             "first_name = ?",
             "last_name = ?",
             "middle_name = ?",
             "date_of_birth = ?",
+            "gender = ?",
             "phone_primary = ?",
             "phone_secondary = ?",
             "email = ?",
             "address = ?",
             "city = ?",
             "province = ?",
+            "id_type = ?",
+            "id_number = ?",
+            "id_expiry_date = ?",
+            "emergency_name = ?",
+            "emergency_phone = ?",
+            "emergency_relationship = ?",
             "notes = ?",
             "is_blacklisted = ?"
         ];
+        
         $params = [
             $data['customer_type'] ?? 'walk_in',
             $data['first_name'],
             $data['last_name'],
             $data['middle_name'] ?? null,
             $dob,
+            $data['gender'] ?? null,
             $data['phone_primary'],
             $data['phone_secondary'] ?? null,
             $data['email'] ?? null,
             $data['address'] ?? null,
             $data['city'] ?? 'General Santos City',
             $data['province'] ?? 'South Cotabato',
+            $data['id_type'] ?? 'drivers_license',
+            $data['id_number'] ?? null,
+            $idExpiry,
+            $data['emergency_name'] ?? null,
+            $data['emergency_phone'] ?? null,
+            $data['emergency_relationship'] ?? null,
             $data['notes'] ?? null,
             isset($data['is_blacklisted']) ? (int)$data['is_blacklisted'] : 0
         ];

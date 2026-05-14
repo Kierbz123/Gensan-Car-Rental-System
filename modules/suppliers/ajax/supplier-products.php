@@ -1,6 +1,6 @@
 <?php
 // modules/suppliers/ajax/supplier-products.php
-// AJAX endpoint for supplier product (parts_inventory) CRUD
+// AJAX endpoint for supplier product (supplier_catalogs) CRUD
 require_once '../../../config/config.php';
 require_once '../../../includes/session-manager.php';
 
@@ -9,7 +9,7 @@ header('Content-Type: application/json');
 $authUser->requirePermission('suppliers.update');
 
 $db     = Database::getInstance();
-$inv    = new Inventory();
+$catalog = new SupplierCatalog();
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
 
 // Helper: get user display name safely
@@ -23,12 +23,7 @@ try {
         case 'list':
             $supplierId = (int)($_GET['supplier_id'] ?? 0);
             if (!$supplierId) throw new Exception('Supplier ID required.');
-            $products = $inv->getBySupplier($supplierId);
-            // getBySupplier returns subset of columns; fetch full rows for the CRUD table
-            $products = $db->fetchAll(
-                "SELECT * FROM parts_inventory WHERE supplier_id = ? ORDER BY item_name ASC",
-                [$supplierId]
-            );
+            $products = $catalog->getBySupplier($supplierId);
             echo json_encode(['success' => true, 'data' => $products]);
             break;
 
@@ -42,35 +37,27 @@ try {
             $itemCategory    = $_POST['item_category'] ?? 'parts';
             $unit            = trim($_POST['unit'] ?? 'pcs');
             $unitCost        = (float)($_POST['unit_cost'] ?? 0);
-            $qtyOnHand       = (float)($_POST['quantity_on_hand'] ?? 0);
-            $reorderLevel    = (float)($_POST['reorder_level'] ?? 0);
-            $storageLocation = trim($_POST['storage_location'] ?? 'Main Garage');
             $notes           = trim($_POST['notes'] ?? '');
 
             if (empty($itemName)) throw new Exception('Product name is required.');
             if (!in_array($itemCategory, ['parts','supplies','fuel','others'])) throw new Exception('Invalid category.');
             if ($unitCost < 0)  throw new Exception('Unit cost cannot be negative.');
-            if ($qtyOnHand < 0) throw new Exception('Quantity cannot be negative.');
 
-            // Use Inventory::create() — handles auto item_code + opening stock transaction
-            $newId = $inv->create([
+            $newId = $catalog->create([
+                'supplier_id'      => $supplierId,
                 'item_name'        => $itemName,
                 'item_category'    => $itemCategory,
                 'unit'             => $unit,
                 'unit_cost'        => $unitCost,
-                'quantity_on_hand' => $qtyOnHand,
-                'reorder_level'    => $reorderLevel,
-                'supplier_id'      => $supplierId,
-                'storage_location' => $storageLocation,
                 'notes'            => $notes,
-            ], $authUser->getId());
+            ]);
 
-            $product = $db->fetchOne("SELECT * FROM parts_inventory WHERE inventory_id = ?", [$newId]);
+            $product = $catalog->getById($newId);
 
             AuditLogger::log(
                 $authUser->getId(), $userName, $userRole,
-                'create', 'suppliers', 'parts_inventory', $product['item_code'],
-                "Added product '{$itemName}' to supplier #{$supplierId}",
+                'create', 'suppliers', 'supplier_catalogs', (string)$newId,
+                "Added product '{$itemName}' to supplier #{$supplierId} catalog",
                 null, json_encode(['item_name' => $itemName, 'unit_cost' => $unitCost, 'supplier_id' => $supplierId]),
                 $_SERVER['REMOTE_ADDR'] ?? '', $_SERVER['HTTP_USER_AGENT'] ?? '',
                 'POST', '/suppliers/ajax/supplier-products', 'info'
@@ -82,37 +69,35 @@ try {
         // ── UPDATE an existing product ────────────────────────────────────
         case 'update':
             if (!validateCsrfToken($_POST['csrf_token'] ?? '')) throw new Exception('Invalid security token.');
-            $inventoryId = (int)($_POST['inventory_id'] ?? 0);
-            if (!$inventoryId) throw new Exception('Inventory ID required.');
+            $catalogId = (int)($_POST['catalog_id'] ?? 0);
+            if (!$catalogId) throw new Exception('Catalog ID required.');
 
-            $existing = $db->fetchOne("SELECT * FROM parts_inventory WHERE inventory_id = ?", [$inventoryId]);
+            $existing = $catalog->getById($catalogId);
             if (!$existing) throw new Exception('Product not found.');
 
             $itemName        = trim($_POST['item_name'] ?? '');
             $itemCategory    = $_POST['item_category'] ?? 'parts';
             $unit            = trim($_POST['unit'] ?? 'pcs');
             $unitCost        = (float)($_POST['unit_cost'] ?? 0);
-            $qtyOnHand       = (float)($_POST['quantity_on_hand'] ?? 0);
-            $reorderLevel    = (float)($_POST['reorder_level'] ?? 0);
-            $storageLocation = trim($_POST['storage_location'] ?? 'Main Garage');
             $notes           = trim($_POST['notes'] ?? '');
 
             if (empty($itemName)) throw new Exception('Product name is required.');
             if (!in_array($itemCategory, ['parts','supplies','fuel','others'])) throw new Exception('Invalid category.');
 
-            $db->execute(
-                "UPDATE parts_inventory
-                 SET item_name=?, item_category=?, unit=?, unit_cost=?,
-                     quantity_on_hand=?, reorder_level=?, storage_location=?, notes=?, updated_at=NOW()
-                 WHERE inventory_id=?",
-                [$itemName, $itemCategory, $unit, $unitCost, $qtyOnHand, $reorderLevel, $storageLocation, $notes, $inventoryId]
-            );
-            $product = $db->fetchOne("SELECT * FROM parts_inventory WHERE inventory_id = ?", [$inventoryId]);
+            $catalog->update($catalogId, [
+                'item_name'        => $itemName,
+                'item_category'    => $itemCategory,
+                'unit'             => $unit,
+                'unit_cost'        => $unitCost,
+                'notes'            => $notes,
+            ]);
+
+            $product = $catalog->getById($catalogId);
 
             AuditLogger::log(
                 $authUser->getId(), $userName, $userRole,
-                'update', 'suppliers', 'parts_inventory', $existing['item_code'],
-                "Updated product '{$itemName}'",
+                'update', 'suppliers', 'supplier_catalogs', (string)$catalogId,
+                "Updated catalog product '{$itemName}'",
                 json_encode($existing), json_encode($product),
                 $_SERVER['REMOTE_ADDR'] ?? '', $_SERVER['HTTP_USER_AGENT'] ?? '',
                 'POST', '/suppliers/ajax/supplier-products', 'info'
@@ -125,31 +110,22 @@ try {
         case 'delete':
             if (!validateCsrfToken($_POST['csrf_token'] ?? '')) throw new Exception('Invalid security token.');
             if (!$authUser->hasPermission('suppliers.delete')) throw new Exception('Insufficient permissions to delete products.');
-            $inventoryId = (int)($_POST['inventory_id'] ?? 0);
-            if (!$inventoryId) throw new Exception('Inventory ID required.');
+            $catalogId = (int)($_POST['catalog_id'] ?? 0);
+            if (!$catalogId) throw new Exception('Catalog ID required.');
 
-            $existing = $db->fetchOne("SELECT * FROM parts_inventory WHERE inventory_id = ?", [$inventoryId]);
+            $existing = $catalog->getById($catalogId);
             if (!$existing) throw new Exception('Product not found.');
 
-            // Safety: block if referenced in any procurement item
-            $usedInPR = (int)$db->fetchColumn(
-                "SELECT COUNT(*) FROM procurement_items WHERE item_description = ?",
-                [$existing['item_name']]
-            );
-            if ($usedInPR > 0) {
-                throw new Exception("Cannot delete: '{$existing['item_name']}' is referenced in {$usedInPR} procurement request(s).");
-            }
-
-            $inv->delete($inventoryId, $authUser->getId());
+            $catalog->delete($catalogId);
 
             echo json_encode(['success' => true, 'message' => 'Product deleted successfully.']);
             break;
 
         // ── GET single product for edit modal ─────────────────────────────
         case 'get':
-            $inventoryId = (int)($_GET['inventory_id'] ?? 0);
-            if (!$inventoryId) throw new Exception('Inventory ID required.');
-            $product = $db->fetchOne("SELECT * FROM parts_inventory WHERE inventory_id = ?", [$inventoryId]);
+            $catalogId = (int)($_GET['catalog_id'] ?? 0);
+            if (!$catalogId) throw new Exception('Catalog ID required.');
+            $product = $catalog->getById($catalogId);
             if (!$product) throw new Exception('Product not found.');
             echo json_encode(['success' => true, 'data' => $product]);
             break;
